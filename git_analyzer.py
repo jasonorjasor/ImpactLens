@@ -4,7 +4,12 @@ import re
 import subprocess
 from pathlib import Path
 
-from analyzer import extract_symbols
+from analyzer import (
+    analyze_sources,
+    build_reverse_graph,
+    extract_symbols,
+    find_impact_paths,
+)
 
 
 def run_git(repository, *arguments):
@@ -84,3 +89,40 @@ def changed_symbols(repository, base_commit, target_commit):
                 )
 
     return symbols
+
+
+def analyze_commit(repository, commit):
+    paths = run_git(repository, "ls-tree", "-r", "--name-only", commit, "--")
+    sources = {
+        path: run_git(repository, "show", f"{commit}:{path}")
+        for path in paths.splitlines()
+        if path.endswith(".py")
+    }
+    return analyze_sources(sources)
+
+
+def analyze_change(repository, base_commit, target_commit):
+    changed = changed_symbols(repository, base_commit, target_commit)
+    target_report = analyze_commit(repository, target_commit)
+    calls = [call for file in target_report["files"] for call in file["calls"]]
+    graph = build_reverse_graph(calls)
+    evidence_paths = []
+    affected_symbols = []
+
+    for symbol in changed:
+        paths = find_impact_paths(symbol["id"], graph)
+        symbol["impact_paths"] = paths
+        for path in paths:
+            if path not in evidence_paths:
+                evidence_paths.append(path)
+            for identifier in path[1:]:
+                if identifier not in affected_symbols:
+                    affected_symbols.append(identifier)
+
+    return {
+        "base_commit": base_commit,
+        "target_commit": target_commit,
+        "changed_symbols": changed,
+        "affected_symbols": affected_symbols,
+        "evidence_paths": evidence_paths,
+    }

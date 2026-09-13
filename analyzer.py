@@ -223,57 +223,7 @@ def resolve_import_module(imported_module, current_module):
     return ".".join(part for part in parts if part)
 
 
-def analyze_repository(root):
-    root = Path(root).resolve()
-    if not root.is_dir():
-        raise ValueError(f"Not a directory: {root}")
-
-    files = []
-    errors = []
-
-    for path in find_python_files(root):
-        relative_path = path.relative_to(root).as_posix()
-
-        try:
-            source = path.read_text(encoding="utf-8")
-            symbols = extract_symbols(source)
-            functions = [
-                symbol
-                for symbol in symbols
-                if symbol["kind"] in {"function", "async_function"}
-            ]
-            calls = extract_calls(source)
-            imports = extract_imports(source)
-        except (OSError, SyntaxError, UnicodeDecodeError) as error:
-            errors.append({"path": relative_path, "error": str(error)})
-            continue
-
-        for symbol in symbols:
-            symbol["path"] = relative_path
-            symbol["id"] = f"{relative_path}::{symbol['qualname']}"
-        for call in calls:
-            call["path"] = relative_path
-            call["caller_id"] = (
-                f"{relative_path}::{call['caller']}"
-                if call["caller"] is not None
-                else None
-            )
-        for item in imports:
-            item["resolved_module"] = resolve_import_module(
-                item["module"], module_name(relative_path)
-            )
-
-        files.append(
-            {
-                "path": relative_path,
-                "module": module_name(relative_path),
-                "symbols": symbols,
-                "functions": functions,
-                "calls": calls,
-                "imports": imports,
-            }
-        )
-
+def _resolve_files(files):
     functions_by_file_and_qualname = {}
     for file in files:
         for function in file["functions"]:
@@ -327,4 +277,72 @@ def analyze_repository(root):
                     call["callee_id"] = None
                     call["resolution"] = "ambiguous" if candidates else "unresolved"
 
-    return {"files": files, "errors": errors}
+    return files
+
+
+def analyze_sources(source_by_path):
+    files = []
+    errors = []
+
+    for relative_path in sorted(source_by_path):
+        source = source_by_path[relative_path]
+
+        try:
+            symbols = extract_symbols(source)
+            functions = [
+                symbol
+                for symbol in symbols
+                if symbol["kind"] in {"function", "async_function"}
+            ]
+            calls = extract_calls(source)
+            imports = extract_imports(source)
+        except (SyntaxError, UnicodeDecodeError) as error:
+            errors.append({"path": relative_path, "error": str(error)})
+            continue
+
+        for symbol in symbols:
+            symbol["path"] = relative_path
+            symbol["id"] = f"{relative_path}::{symbol['qualname']}"
+        for call in calls:
+            call["path"] = relative_path
+            call["caller_id"] = (
+                f"{relative_path}::{call['caller']}"
+                if call["caller"] is not None
+                else None
+            )
+        for item in imports:
+            item["resolved_module"] = resolve_import_module(
+                item["module"], module_name(relative_path)
+            )
+
+        files.append(
+            {
+                "path": relative_path,
+                "module": module_name(relative_path),
+                "symbols": symbols,
+                "functions": functions,
+                "calls": calls,
+                "imports": imports,
+            }
+        )
+
+    return {"files": _resolve_files(files), "errors": errors}
+
+
+def analyze_repository(root):
+    root = Path(root).resolve()
+    if not root.is_dir():
+        raise ValueError(f"Not a directory: {root}")
+
+    sources = {}
+    errors = []
+    for path in find_python_files(root):
+        relative_path = path.relative_to(root).as_posix()
+        try:
+            sources[relative_path] = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            errors.append({"path": relative_path, "error": str(error)})
+
+    report = analyze_sources(sources)
+    report["errors"] = errors + report["errors"]
+    return report
