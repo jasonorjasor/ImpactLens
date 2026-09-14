@@ -39,6 +39,8 @@ Use `--json` for machine-readable output:
 python cli.py PATH_TO_REPOSITORY BASE_COMMIT TARGET_COMMIT --json
 ```
 
+Human-readable output shows up to 20 impact paths by default. Use `--all-paths` to show the full list.
+
 ## Main files
 
 - `analyzer.py` contains the Python parsing and dependency analysis.

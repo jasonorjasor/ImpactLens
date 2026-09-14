@@ -10,7 +10,11 @@ def sample_report():
         "changed_symbols": [
             {"id": "auth.py::verify_user", "changed_lines": [2]}
         ],
-        "affected_symbols": ["services.py::login"],
+        "affected_symbols": [
+            "services.py::login",
+            "tests/test_login.py::test_login_route",
+            "tests/test_login.py::helper",
+        ],
         "affected_routes": [
             {
                 "symbol_id": "routes.py::login_route",
@@ -32,6 +36,8 @@ def test_main_prints_human_readable_report(monkeypatch, capsys, tmp_path):
 
     output = capsys.readouterr().out
     assert "Changed symbols (1)" in output
+    assert "Affected code symbols (1)" in output
+    assert "tests/test_login.py::helper" not in output
     assert "POST /api/login" in output
     assert "auth.py::verify_user -> services.py::login" in output
 
@@ -44,6 +50,29 @@ def test_main_can_print_json(monkeypatch, capsys, tmp_path):
     output = json.loads(capsys.readouterr().out)
     assert output["target_commit"] == "new"
     assert output["affected_routes"][0]["path"] == "/api/login"
+
+
+def test_main_can_show_all_impact_paths(monkeypatch, capsys, tmp_path):
+    report = sample_report()
+    report["evidence_paths"] = [[f"symbol_{index}"] for index in range(21)]
+    monkeypatch.setattr(cli, "analyze_change", lambda *args: report)
+
+    assert cli.main([str(tmp_path), "old", "new", "--all-paths"]) == 0
+
+    output = capsys.readouterr().out
+    assert "symbol_20" in output
+    assert "more paths" not in output
+
+
+def test_format_report_limits_paths_by_default():
+    report = sample_report()
+    report["evidence_paths"] = [[f"symbol_{index}"] for index in range(21)]
+
+    output = cli.format_report(report)
+
+    assert "Impact paths (21)" in output
+    assert "- 1 more paths (use --all-paths)" in output
+    assert "symbol_20" not in output
 
 
 def test_main_can_analyze_the_working_tree(monkeypatch, capsys, tmp_path):

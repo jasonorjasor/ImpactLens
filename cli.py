@@ -1,10 +1,21 @@
 import argparse
 import json
+from pathlib import Path
 
 from git_analyzer import analyze_change, analyze_working_tree
 
 
-def format_report(report):
+def is_test_identifier(identifier):
+    relative_path = identifier.split("::", 1)[0]
+    path = Path(relative_path)
+    return (
+        "tests" in path.parts
+        or path.name.startswith("test_")
+        or path.name.endswith("_test.py")
+    )
+
+
+def format_report(report, max_paths=20):
     lines = [
         "ImpactLens",
         f"Comparison: {report['base_commit']} -> {report['target_commit']}",
@@ -20,8 +31,13 @@ def format_report(report):
     else:
         lines.append("- none")
 
-    affected = report["affected_symbols"]
-    lines.extend(["", f"Affected symbols ({len(affected)})"])
+    related_tests = set(report["related_tests"])
+    affected = [
+        symbol
+        for symbol in report["affected_symbols"]
+        if symbol not in related_tests and not is_test_identifier(symbol)
+    ]
+    lines.extend(["", f"Affected code symbols ({len(affected)})"])
     lines.extend(f"- {symbol}" for symbol in affected or ["none"])
 
     routes = report["affected_routes"]
@@ -40,10 +56,14 @@ def format_report(report):
 
     paths = report["evidence_paths"]
     lines.extend(["", f"Impact paths ({len(paths)})"])
-    if paths:
-        lines.extend(f"- {' -> '.join(path)}" for path in paths)
+    visible_paths = paths if max_paths is None else paths[:max_paths]
+    if visible_paths:
+        lines.extend(f"- {' -> '.join(path)}" for path in visible_paths)
     else:
         lines.append("- none")
+    if len(visible_paths) < len(paths):
+        remaining = len(paths) - len(visible_paths)
+        lines.append(f"- {remaining} more paths (use --all-paths)")
 
     return "\n".join(lines)
 
@@ -69,6 +89,11 @@ def build_parser():
         action="store_true",
         help="Print the report as JSON",
     )
+    parser.add_argument(
+        "--all-paths",
+        action="store_true",
+        help="Print every impact path in human-readable output",
+    )
     return parser
 
 
@@ -87,7 +112,8 @@ def main(arguments=None):
     if args.json:
         print(json.dumps(report, indent=2))
     else:
-        print(format_report(report))
+        max_paths = None if args.all_paths else 20
+        print(format_report(report, max_paths=max_paths))
 
     return 0
 
