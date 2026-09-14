@@ -30,8 +30,18 @@ def test_builds_impact_report_from_two_commits(tmp_path):
         encoding="utf-8",
     )
     (repository / "routes.py").write_text(
-        "from services import login\n\n"
-        "def login_route():\n    return login()\n",
+        "from services import login\n"
+        "from fastapi import APIRouter\n\n"
+        "router = APIRouter()\n\n"
+        "@router.post(\"/api/login\")\n"
+        "def login_route():\n"
+        "    return login()\n",
+        encoding="utf-8",
+    )
+    (repository / "tests").mkdir()
+    (repository / "tests" / "test_login.py").write_text(
+        "from routes import login_route\n\n"
+        "def test_login_route():\n    return login_route()\n",
         encoding="utf-8",
     )
     run_git(repository, "add", ".")
@@ -53,11 +63,21 @@ def test_builds_impact_report_from_two_commits(tmp_path):
     assert report["affected_symbols"] == [
         "services.py::login",
         "routes.py::login_route",
+        "tests/test_login.py::test_login_route",
     ]
     assert report["evidence_paths"] == [
         [
             "auth.py::verify_user",
             "services.py::login",
             "routes.py::login_route",
+            "tests/test_login.py::test_login_route",
         ]
     ]
+    assert report["affected_routes"] == [
+        {
+            "symbol_id": "routes.py::login_route",
+            "method": "POST",
+            "path": "/api/login",
+        }
+    ]
+    assert report["related_tests"] == ["tests/test_login.py::test_login_route"]

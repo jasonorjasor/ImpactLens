@@ -119,10 +119,30 @@ def analyze_change(repository, base_commit, target_commit):
                 if identifier not in affected_symbols:
                     affected_symbols.append(identifier)
 
+    impacted_ids = [symbol["id"] for symbol in changed] + affected_symbols
+    affected_routes = [
+        {
+            "symbol_id": route["id"],
+            "method": route["method"],
+            "path": route["path"],
+        }
+        for file in target_report["files"]
+        for route in file["routes"]
+        if route["id"] in impacted_ids
+    ]
+    related_tests = [
+        test["id"]
+        for file in target_report["files"]
+        for test in file["tests"]
+        if test["id"] in impacted_ids
+    ]
+
     return {
         "base_commit": base_commit,
         "target_commit": target_commit,
         "changed_symbols": changed,
         "affected_symbols": affected_symbols,
         "evidence_paths": evidence_paths,
+        "affected_routes": affected_routes,
+        "related_tests": related_tests,
     }

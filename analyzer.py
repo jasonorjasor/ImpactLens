@@ -140,6 +140,72 @@ def extract_imports(source):
     return imports
 
 
+FASTAPI_METHODS = {"delete", "get", "head", "options", "patch", "post", "put", "websocket"}
+
+
+class RouteVisitor(ast.NodeVisitor):
+    def __init__(self):
+        self.scope = []
+        self.routes = []
+
+    def visit_ClassDef(self, node):
+        self.scope.append(node.name)
+        self.generic_visit(node)
+        self.scope.pop()
+
+    def _visit_function(self, node):
+        qualname = ".".join(self.scope + [node.name])
+        for decorator in node.decorator_list:
+            if not isinstance(decorator, ast.Call):
+                continue
+            if not isinstance(decorator.func, ast.Attribute):
+                continue
+            method = decorator.func.attr.lower()
+            if method not in FASTAPI_METHODS:
+                continue
+            if not decorator.args or not isinstance(decorator.args[0], ast.Constant):
+                continue
+            if not isinstance(decorator.args[0].value, str):
+                continue
+            self.routes.append(
+                {
+                    "qualname": qualname,
+                    "method": method.upper(),
+                    "path": decorator.args[0].value,
+                }
+            )
+
+        self.scope.append(node.name)
+        self.generic_visit(node)
+        self.scope.pop()
+
+    def visit_FunctionDef(self, node):
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node):
+        self._visit_function(node)
+
+
+def extract_routes(source):
+    tree = ast.parse(source)
+    visitor = RouteVisitor()
+    visitor.visit(tree)
+    return visitor.routes
+
+
+def is_test_symbol(relative_path, symbol):
+    path = Path(relative_path)
+    is_test_file = (
+        "tests" in path.parts
+        or path.name.startswith("test_")
+        or path.name.endswith("_test.py")
+    )
+    return is_test_file and (
+        symbol["name"].startswith("test_")
+        or (symbol["kind"] == "class" and symbol["name"].startswith("Test"))
+    )
+
+
 def build_reverse_graph(calls):
     reverse_graph = {}
 
@@ -296,6 +362,7 @@ def analyze_sources(source_by_path):
             ]
             calls = extract_calls(source)
             imports = extract_imports(source)
+            routes = extract_routes(source)
         except (SyntaxError, UnicodeDecodeError) as error:
             errors.append({"path": relative_path, "error": str(error)})
             continue
@@ -314,6 +381,18 @@ def analyze_sources(source_by_path):
             item["resolved_module"] = resolve_import_module(
                 item["module"], module_name(relative_path)
             )
+        for route in routes:
+            route["id"] = f"{relative_path}::{route['qualname']}"
+
+        tests = [
+            {
+                "id": f"{relative_path}::{symbol['qualname']}",
+                "path": relative_path,
+                "qualname": symbol["qualname"],
+            }
+            for symbol in symbols
+            if is_test_symbol(relative_path, symbol)
+        ]
 
         files.append(
             {
@@ -323,6 +402,8 @@ def analyze_sources(source_by_path):
                 "functions": functions,
                 "calls": calls,
                 "imports": imports,
+                "routes": routes,
+                "tests": tests,
             }
         )
 
