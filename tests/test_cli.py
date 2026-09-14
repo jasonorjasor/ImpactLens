@@ -102,5 +102,5 @@ def test_main_can_analyze_the_working_tree(monkeypatch, capsys, tmp_path):
 
     assert cli.main([str(tmp_path), "HEAD", "--working-tree"]) == 0
 
-    assert calls == [(str(tmp_path), "HEAD")]
+    assert calls == [(tmp_path.resolve(), "HEAD")]
     assert "Comparison: old -> new" in capsys.readouterr().out

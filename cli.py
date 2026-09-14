@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from git_analyzer import analyze_change, analyze_working_tree
+from repository_loader import RepositoryLoadError, is_github_url, open_repository
 
 
 def is_test_identifier(identifier):
@@ -82,7 +83,10 @@ def build_parser():
     parser = argparse.ArgumentParser(
         description="Analyze the impact of a Python change between two commits or against the working tree."
     )
-    parser.add_argument("repository", help="Path to a local Git repository")
+    parser.add_argument(
+        "repository",
+        help="Path to a local Git repository or a public GitHub URL",
+    )
     parser.add_argument("base_commit", help="Older commit to compare")
     parser.add_argument(
         "target_commit",
@@ -110,14 +114,35 @@ def build_parser():
 def main(arguments=None):
     parser = build_parser()
     args = parser.parse_args(arguments)
-    if args.working_tree:
-        if args.target_commit is not None:
-            parser.error("target_commit cannot be used with --working-tree")
-        report = analyze_working_tree(args.repository, args.base_commit)
-    else:
-        if args.target_commit is None:
-            parser.error("target_commit is required unless --working-tree is used")
-        report = analyze_change(args.repository, args.base_commit, args.target_commit)
+    try:
+        if args.working_tree:
+            if args.target_commit is not None:
+                parser.error("target_commit cannot be used with --working-tree")
+            with open_repository(args.repository) as repository:
+                report = analyze_working_tree(repository, args.base_commit)
+        else:
+            if args.target_commit is None:
+                parser.error("target_commit is required unless --working-tree is used")
+            if is_github_url(args.repository):
+                with open_repository(
+                    args.repository,
+                    args.base_commit,
+                    args.target_commit,
+                ) as repository:
+                    report = analyze_change(
+                        repository,
+                        args.base_commit,
+                        args.target_commit,
+                    )
+            else:
+                with open_repository(args.repository) as repository:
+                    report = analyze_change(
+                        repository,
+                        args.base_commit,
+                        args.target_commit,
+                    )
+    except RepositoryLoadError as error:
+        parser.error(str(error))
 
     if args.json:
         print(json.dumps(report, indent=2))
