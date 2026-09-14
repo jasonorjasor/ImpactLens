@@ -19,10 +19,25 @@ From the project folder:
 python -m pytest -q
 ```
 
+## Run an analysis
+
+The CLI compares two commits in a local Git repository:
+
+```powershell
+python cli.py PATH_TO_REPOSITORY BASE_COMMIT TARGET_COMMIT
+```
+
+Use `--json` for machine-readable output:
+
+```powershell
+python cli.py PATH_TO_REPOSITORY BASE_COMMIT TARGET_COMMIT --json
+```
+
 ## Main files
 
 - `analyzer.py` contains the Python parsing and dependency analysis.
 - `git_analyzer.py` connects the analysis to Git commits.
+- `cli.py` formats an impact report for the terminal or as JSON.
 - `test_*.py` contains the tests.
 - `example_repo/` and `relative_repo/` contain small examples used by the tests.
 
@@ -32,7 +47,6 @@ ImpactLens analyzes Python source statically. It does not run the code, and it c
 
 ## Planned work
 
-- add a clearer command-line report
 - build a FastAPI backend
 - build a React interface
 - support analysis of public GitHub repositories
