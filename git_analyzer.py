@@ -6,6 +6,7 @@ from pathlib import Path
 
 from analyzer import (
     analyze_sources,
+    analyze_repository,
     build_reverse_graph,
     extract_symbols,
     find_impact_paths,
@@ -22,17 +23,12 @@ def run_git(repository, *arguments):
     return result.stdout
 
 
-def changed_python_lines(repository, base_commit, target_commit):
-    diff = run_git(
-        repository,
-        "diff",
-        "--unified=0",
-        "--no-renames",
-        base_commit,
-        target_commit,
-        "--",
-        "*.py",
-    )
+def changed_python_lines(repository, base_commit, target_commit=None):
+    arguments = ["diff", "--unified=0", "--no-renames", base_commit]
+    if target_commit is not None:
+        arguments.append(target_commit)
+    arguments.extend(["--", "*.py"])
+    diff = run_git(repository, *arguments)
     changed = {}
     current_path = None
     new_line = None
@@ -56,15 +52,18 @@ def changed_python_lines(repository, base_commit, target_commit):
     return {path: lines for path, lines in changed.items() if path}
 
 
-def changed_symbols(repository, base_commit, target_commit):
+def changed_symbols(repository, base_commit, target_commit=None):
     repository = Path(repository).resolve()
     changed_lines = changed_python_lines(repository, base_commit, target_commit)
     symbols = []
 
     for path, lines in changed_lines.items():
         try:
-            source = run_git(repository, "show", f"{target_commit}:{path}")
-        except subprocess.CalledProcessError:
+            if target_commit is None:
+                source = (repository / path).read_text(encoding="utf-8")
+            else:
+                source = run_git(repository, "show", f"{target_commit}:{path}")
+        except (OSError, UnicodeDecodeError, subprocess.CalledProcessError):
             continue
 
         for symbol in extract_symbols(source):
@@ -91,7 +90,10 @@ def changed_symbols(repository, base_commit, target_commit):
     return symbols
 
 
-def analyze_commit(repository, commit):
+def analyze_commit(repository, commit=None):
+    if commit is None:
+        return analyze_repository(repository)
+
     paths = run_git(repository, "ls-tree", "-r", "--name-only", commit, "--")
     sources = {
         path: run_git(repository, "show", f"{commit}:{path}")
@@ -101,7 +103,7 @@ def analyze_commit(repository, commit):
     return analyze_sources(sources)
 
 
-def analyze_change(repository, base_commit, target_commit):
+def analyze_change(repository, base_commit, target_commit=None):
     changed = changed_symbols(repository, base_commit, target_commit)
     target_report = analyze_commit(repository, target_commit)
     calls = [call for file in target_report["files"] for call in file["calls"]]
@@ -139,10 +141,14 @@ def analyze_change(repository, base_commit, target_commit):
 
     return {
         "base_commit": base_commit,
-        "target_commit": target_commit,
+        "target_commit": target_commit or "WORKING_TREE",
         "changed_symbols": changed,
         "affected_symbols": affected_symbols,
         "evidence_paths": evidence_paths,
         "affected_routes": affected_routes,
         "related_tests": related_tests,
     }
+
+
+def analyze_working_tree(repository, base_commit="HEAD"):
+    return analyze_change(repository, base_commit, None)

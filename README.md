@@ -27,6 +27,12 @@ The CLI compares two commits in a local Git repository:
 python cli.py PATH_TO_REPOSITORY BASE_COMMIT TARGET_COMMIT
 ```
 
+Compare the current files with `HEAD`:
+
+```powershell
+python cli.py PATH_TO_REPOSITORY HEAD --working-tree
+```
+
 Use `--json` for machine-readable output:
 
 ```powershell
@@ -45,6 +51,7 @@ python cli.py PATH_TO_REPOSITORY BASE_COMMIT TARGET_COMMIT --json
 ## Current limitations
 
 ImpactLens analyzes Python source statically. It does not run the code, and it cannot always resolve dynamic calls, reflection, or code generated at runtime.
+Working-tree mode currently includes tracked Python changes; untracked files are not included yet.
 
 ## Planned work
 

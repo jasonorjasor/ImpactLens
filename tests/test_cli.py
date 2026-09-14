@@ -44,3 +44,18 @@ def test_main_can_print_json(monkeypatch, capsys, tmp_path):
     output = json.loads(capsys.readouterr().out)
     assert output["target_commit"] == "new"
     assert output["affected_routes"][0]["path"] == "/api/login"
+
+
+def test_main_can_analyze_the_working_tree(monkeypatch, capsys, tmp_path):
+    calls = []
+
+    def fake_analyze_working_tree(*args):
+        calls.append(args)
+        return sample_report()
+
+    monkeypatch.setattr(cli, "analyze_working_tree", fake_analyze_working_tree)
+
+    assert cli.main([str(tmp_path), "HEAD", "--working-tree"]) == 0
+
+    assert calls == [(str(tmp_path), "HEAD")]
+    assert "Comparison: old -> new" in capsys.readouterr().out

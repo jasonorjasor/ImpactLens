@@ -1,13 +1,13 @@
 import argparse
 import json
 
-from git_analyzer import analyze_change
+from git_analyzer import analyze_change, analyze_working_tree
 
 
 def format_report(report):
     lines = [
         "ImpactLens",
-        f"Commits: {report['base_commit']} -> {report['target_commit']}",
+        f"Comparison: {report['base_commit']} -> {report['target_commit']}",
         "",
     ]
 
@@ -50,11 +50,20 @@ def format_report(report):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Analyze the impact of a Python change between two Git commits."
+        description="Analyze the impact of a Python change between two commits or against the working tree."
     )
     parser.add_argument("repository", help="Path to a local Git repository")
     parser.add_argument("base_commit", help="Older commit to compare")
-    parser.add_argument("target_commit", help="Newer commit to analyze")
+    parser.add_argument(
+        "target_commit",
+        nargs="?",
+        help="Newer commit to analyze",
+    )
+    parser.add_argument(
+        "--working-tree",
+        action="store_true",
+        help="Compare the current files against the base commit",
+    )
     parser.add_argument(
         "--json",
         action="store_true",
@@ -66,7 +75,14 @@ def build_parser():
 def main(arguments=None):
     parser = build_parser()
     args = parser.parse_args(arguments)
-    report = analyze_change(args.repository, args.base_commit, args.target_commit)
+    if args.working_tree:
+        if args.target_commit is not None:
+            parser.error("target_commit cannot be used with --working-tree")
+        report = analyze_working_tree(args.repository, args.base_commit)
+    else:
+        if args.target_commit is None:
+            parser.error("target_commit is required unless --working-tree is used")
+        report = analyze_change(args.repository, args.base_commit, args.target_commit)
 
     if args.json:
         print(json.dumps(report, indent=2))

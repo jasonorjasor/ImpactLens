@@ -2,7 +2,11 @@
 
 import subprocess
 
-from git_analyzer import changed_python_lines, changed_symbols
+from git_analyzer import (
+    analyze_working_tree,
+    changed_python_lines,
+    changed_symbols,
+)
 
 
 def run_git(repository, *arguments):
@@ -50,4 +54,17 @@ def test_maps_changed_lines_to_target_functions(tmp_path):
             "line_end": 2,
             "changed_lines": [2],
         }
+    ]
+
+    source.write_text(
+        "def verify_user():\n    return 0\n\n"
+        "def unchanged():\n    return 1\n",
+        encoding="utf-8",
+    )
+
+    assert changed_python_lines(repository, target_commit) == {"auth.py": {2}}
+    working_tree_report = analyze_working_tree(repository, target_commit)
+    assert working_tree_report["target_commit"] == "WORKING_TREE"
+    assert [symbol["id"] for symbol in working_tree_report["changed_symbols"]] == [
+        "auth.py::verify_user"
     ]
