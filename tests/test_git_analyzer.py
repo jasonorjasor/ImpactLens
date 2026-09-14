@@ -68,3 +68,43 @@ def test_maps_changed_lines_to_target_functions(tmp_path):
     assert [symbol["id"] for symbol in working_tree_report["changed_symbols"]] == [
         "auth.py::verify_user"
     ]
+
+
+def test_detects_untracked_deleted_and_renamed_working_tree_files(tmp_path):
+    repository = tmp_path / "repo"
+    repository.mkdir()
+    run_git(repository, "init")
+    run_git(repository, "config", "user.email", "impactlens@example.com")
+    run_git(repository, "config", "user.name", "ImpactLens Tests")
+
+    (repository / "old.py").write_text(
+        "def old_function():\n    return True\n", encoding="utf-8"
+    )
+    (repository / "deleted.py").write_text(
+        "def removed_function():\n    return True\n", encoding="utf-8"
+    )
+    run_git(repository, "add", ".")
+    run_git(repository, "commit", "-m", "base")
+    base_commit = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+
+    (repository / "old.py").rename(repository / "renamed.py")
+    (repository / "deleted.py").unlink()
+    (repository / "new.py").write_text(
+        "def new_function():\n"
+        "    first = 1\n"
+        "    second = 2\n"
+        "    third = 3\n"
+        "    fourth = 4\n"
+        "    return first + second + third + fourth\n",
+        encoding="utf-8",
+    )
+
+    symbols = changed_symbols(repository, base_commit)
+    symbols_by_id = {symbol["id"]: symbol for symbol in symbols}
+
+    assert symbols_by_id["renamed.py::old_function"]["change_type"] == "renamed"
+    assert symbols_by_id["renamed.py::old_function"]["previous_id"] == (
+        "old.py::old_function"
+    )
+    assert symbols_by_id["new.py::new_function"]["change_type"] == "added"
+    assert symbols_by_id["deleted.py::removed_function"]["change_type"] == "deleted"

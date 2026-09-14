@@ -1,5 +1,6 @@
 """Git-based change analysis for ImpactLens."""
 
+import difflib
 import re
 import subprocess
 from pathlib import Path
@@ -21,6 +22,77 @@ def run_git(repository, *arguments):
         text=True,
     )
     return result.stdout
+
+
+def untracked_python_files(repository):
+    output = run_git(
+        repository,
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        "--",
+        "*.py",
+    )
+    return {path for path in output.splitlines() if path}
+
+
+def working_tree_file_changes(repository, base_commit):
+    output = run_git(
+        repository,
+        "diff",
+        "--name-status",
+        "--find-renames",
+        base_commit,
+        "--",
+        "*.py",
+    )
+    deleted = set()
+    renamed = {}
+
+    for line in output.splitlines():
+        parts = line.split("\t")
+        status = parts[0]
+        if status.startswith("R") and len(parts) >= 3:
+            renamed[parts[2]] = parts[1]
+        elif status == "D" and len(parts) >= 2:
+            deleted.add(parts[1])
+
+    return deleted, renamed
+
+
+def detect_untracked_renames(repository, base_commit, deleted, untracked):
+    candidates = []
+    for new_path in sorted(untracked):
+        try:
+            new_source = (Path(repository) / new_path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        for old_path in sorted(deleted):
+            try:
+                old_source = run_git(repository, "show", f"{base_commit}:{old_path}")
+            except subprocess.CalledProcessError:
+                continue
+
+            similarity = difflib.SequenceMatcher(
+                None,
+                old_source,
+                new_source,
+            ).ratio()
+            if similarity >= 0.8:
+                candidates.append((similarity, old_path, new_path))
+
+    renames = {}
+    used_old_paths = set()
+    used_new_paths = set()
+    for _, old_path, new_path in sorted(candidates, reverse=True):
+        if old_path in used_old_paths or new_path in used_new_paths:
+            continue
+        renames[new_path] = old_path
+        used_old_paths.add(old_path)
+        used_new_paths.add(new_path)
+
+    return renames
 
 
 def changed_python_lines(repository, base_commit, target_commit=None):
@@ -49,6 +121,16 @@ def changed_python_lines(repository, base_commit, target_commit=None):
             elif line.startswith(" "):
                 new_line += 1
 
+    if target_commit is None:
+        for path in untracked_python_files(repository):
+            try:
+                source = (Path(repository) / path).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            line_count = len(source.splitlines())
+            if line_count:
+                changed.setdefault(path, set()).update(range(1, line_count + 1))
+
     return {path: lines for path, lines in changed.items() if path}
 
 
@@ -56,6 +138,17 @@ def changed_symbols(repository, base_commit, target_commit=None):
     repository = Path(repository).resolve()
     changed_lines = changed_python_lines(repository, base_commit, target_commit)
     symbols = []
+    untracked = untracked_python_files(repository) if target_commit is None else set()
+    deleted, renamed = (
+        working_tree_file_changes(repository, base_commit)
+        if target_commit is None
+        else (set(), {})
+    )
+    if target_commit is None:
+        renamed.update(
+            detect_untracked_renames(repository, base_commit, deleted, untracked)
+        )
+        deleted -= set(renamed.values())
 
     for path, lines in changed_lines.items():
         try:
@@ -76,14 +169,42 @@ def changed_symbols(repository, base_commit, target_commit=None):
                 if symbol["line_start"] <= line <= symbol["line_end"]
             ]
             if affected_lines:
+                changed_symbol = {
+                    "id": symbol_id,
+                    "path": path,
+                    "qualname": symbol["qualname"],
+                    "line_start": symbol["line_start"],
+                    "line_end": symbol["line_end"],
+                    "changed_lines": affected_lines,
+                }
+                if path in renamed:
+                    changed_symbol["change_type"] = "renamed"
+                    changed_symbol["previous_id"] = (
+                        f"{renamed[path]}::{symbol['qualname']}"
+                    )
+                elif path in untracked:
+                    changed_symbol["change_type"] = "added"
+                symbols.append(changed_symbol)
+
+    if target_commit is None:
+        for path in sorted(deleted):
+            try:
+                source = run_git(repository, "show", f"{base_commit}:{path}")
+            except subprocess.CalledProcessError:
+                continue
+
+            for symbol in extract_symbols(source):
+                if symbol["kind"] not in {"function", "async_function"}:
+                    continue
                 symbols.append(
                     {
-                        "id": symbol_id,
+                        "id": f"{path}::{symbol['qualname']}",
                         "path": path,
                         "qualname": symbol["qualname"],
                         "line_start": symbol["line_start"],
                         "line_end": symbol["line_end"],
-                        "changed_lines": affected_lines,
+                        "changed_lines": [],
+                        "change_type": "deleted",
                     }
                 )
 

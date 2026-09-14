@@ -53,7 +53,8 @@ Human-readable output shows up to 20 impact paths by default. Use `--all-paths` 
 ## Current limitations
 
 ImpactLens analyzes Python source statically. It does not run the code, and it cannot always resolve dynamic calls, reflection, or code generated at runtime.
-Working-tree mode currently includes tracked Python changes; untracked files are not included yet.
+Working-tree mode includes tracked and untracked Python changes. Deleted symbols are reported, but their remaining callers may be unresolved because the deleted code is absent from the current snapshot.
+Renames are detected from Git metadata or conservative file-content similarity; ambiguous cases may be reported as separate additions and deletions.
 
 ## Planned work
 

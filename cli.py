@@ -26,8 +26,18 @@ def format_report(report, max_paths=20):
     lines.append(f"Changed symbols ({len(changed)})")
     if changed:
         for symbol in changed:
-            changed_lines = ", ".join(str(line) for line in symbol["changed_lines"])
-            lines.append(f"- {symbol['id']} (lines: {changed_lines})")
+            details = []
+            if symbol.get("change_type"):
+                details.append(symbol["change_type"])
+            if symbol.get("previous_id"):
+                details.append(f"from {symbol['previous_id']}")
+            if symbol["changed_lines"]:
+                changed_lines = ", ".join(
+                    str(line) for line in symbol["changed_lines"]
+                )
+                details.append(f"lines: {changed_lines}")
+            detail = f" ({'; '.join(details)})" if details else ""
+            lines.append(f"- {symbol['id']}{detail}")
     else:
         lines.append("- none")
 

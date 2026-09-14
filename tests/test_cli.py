@@ -75,6 +75,22 @@ def test_format_report_limits_paths_by_default():
     assert "symbol_20" not in output
 
 
+def test_format_report_shows_rename_source():
+    report = sample_report()
+    report["changed_symbols"] = [
+        {
+            "id": "renamed.py::old_function",
+            "changed_lines": [1],
+            "change_type": "renamed",
+            "previous_id": "old.py::old_function",
+        }
+    ]
+
+    output = cli.format_report(report)
+
+    assert "renamed.py::old_function (renamed; from old.py::old_function; lines: 1)" in output
+
+
 def test_main_can_analyze_the_working_tree(monkeypatch, capsys, tmp_path):
     calls = []
 
