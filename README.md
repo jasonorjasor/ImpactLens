@@ -38,6 +38,7 @@ python cli.py PATH_TO_REPOSITORY BASE_COMMIT TARGET_COMMIT --json
 - `analyzer.py` contains the Python parsing and dependency analysis.
 - `git_analyzer.py` connects the analysis to Git commits.
 - `cli.py` formats an impact report for the terminal or as JSON.
+- `pyproject.toml` contains project tool configuration.
 - `tests/` contains the tests.
 - `examples/` contains small repositories used by the tests and lessons.
 
