@@ -47,12 +47,23 @@ python cli.py PATH_TO_REPOSITORY BASE_COMMIT TARGET_COMMIT --json
 
 Human-readable output shows up to 20 impact paths by default. Use `--all-paths` to show the full list.
 
+## Run the API
+
+Start the development server:
+
+```powershell
+python -m uvicorn api:app --reload
+```
+
+The API provides `GET /health` and `POST /analyze`. FastAPI's interactive documentation is available at `http://127.0.0.1:8000/docs`.
+
 ## Main files
 
 - `analyzer.py` contains the Python parsing and dependency analysis.
 - `git_analyzer.py` connects the analysis to Git commits.
 - `cli.py` formats an impact report for the terminal or as JSON.
 - `repository_loader.py` validates and temporarily clones public GitHub repositories.
+- `api.py` exposes the analyzer through FastAPI.
 - `pyproject.toml` contains project tool configuration.
 - `tests/` contains the tests.
 - `examples/` contains small repositories used by the tests and lessons.
@@ -66,5 +77,4 @@ Public GitHub repositories are limited to HTTPS URLs and a 100 MB cloned-reposit
 
 ## Planned work
 
-- build a FastAPI backend
 - build a React interface

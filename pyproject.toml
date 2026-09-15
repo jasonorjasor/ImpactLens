@@ -1,3 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "impactlens"
+version = "0.1.0"
+description = "Static impact analysis for Python code changes"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.100,<1.0",
+    "uvicorn>=0.20,<1.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<9"]
+
+[tool.setuptools]
+py-modules = ["analyzer", "git_analyzer", "cli", "repository_loader", "api"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
