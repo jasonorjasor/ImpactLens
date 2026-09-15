@@ -58,6 +58,11 @@ function Report({ report }) {
               {symbol.changed_lines?.length > 0 && (
                 <span className="detail">Lines {symbol.changed_lines.join(', ')}</span>
               )}
+              {symbol.removed_lines?.length > 0 && (
+                <span className="detail">
+                  Removed lines {symbol.removed_lines.join(', ')}
+                </span>
+              )}
             </>
           )}
         />

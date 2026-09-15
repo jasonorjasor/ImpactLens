@@ -53,6 +53,7 @@ def test_maps_changed_lines_to_target_functions(tmp_path):
             "line_start": 1,
             "line_end": 2,
             "changed_lines": [2],
+            "removed_lines": [2],
         }
     ]
 
@@ -67,6 +68,54 @@ def test_maps_changed_lines_to_target_functions(tmp_path):
     assert working_tree_report["target_commit"] == "WORKING_TREE"
     assert [symbol["id"] for symbol in working_tree_report["changed_symbols"]] == [
         "auth.py::verify_user"
+    ]
+
+
+def test_maps_removed_lines_to_the_function_that_lost_them(tmp_path):
+    repository = tmp_path / "repo"
+    repository.mkdir()
+    run_git(repository, "init")
+    run_git(repository, "config", "user.email", "impactlens@example.com")
+    run_git(repository, "config", "user.name", "ImpactLens Tests")
+
+    source = repository / "auth.py"
+    source.write_text(
+        "def verify_user():\n    load_user()\n    return True\n",
+        encoding="utf-8",
+    )
+    run_git(repository, "add", "auth.py")
+    run_git(repository, "commit", "-m", "base")
+    base_commit = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+
+    source.write_text(
+        "def verify_user():\n    return True\n",
+        encoding="utf-8",
+    )
+    assert changed_symbols(repository, base_commit) == [
+        {
+            "id": "auth.py::verify_user",
+            "path": "auth.py",
+            "qualname": "verify_user",
+            "line_start": 1,
+            "line_end": 2,
+            "changed_lines": [],
+            "removed_lines": [2],
+        }
+    ]
+    run_git(repository, "add", "auth.py")
+    run_git(repository, "commit", "-m", "remove user loading")
+    target_commit = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+
+    assert changed_symbols(repository, base_commit, target_commit) == [
+        {
+            "id": "auth.py::verify_user",
+            "path": "auth.py",
+            "qualname": "verify_user",
+            "line_start": 1,
+            "line_end": 2,
+            "changed_lines": [],
+            "removed_lines": [2],
+        }
     ]
 
 

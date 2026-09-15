@@ -95,7 +95,7 @@ def detect_untracked_renames(repository, base_commit, deleted, untracked):
     return renames
 
 
-def changed_python_lines(repository, base_commit, target_commit=None):
+def changed_python_line_ranges(repository, base_commit, target_commit=None):
     arguments = ["diff", "--unified=0", "--no-renames", base_commit]
     if target_commit is not None:
         arguments.append(target_commit)
@@ -103,22 +103,35 @@ def changed_python_lines(repository, base_commit, target_commit=None):
     diff = run_git(repository, *arguments)
     changed = {}
     current_path = None
+    old_line = None
     new_line = None
-    pattern = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+    pattern = re.compile(
+        r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@"
+    )
 
     for line in diff.splitlines():
-        if line.startswith("+++ b/"):
+        if line.startswith("--- a/"):
+            current_path = line[6:]
+        elif line.startswith("+++ b/"):
             current_path = line[6:]
         elif line.startswith("@@"):
             match = pattern.match(line)
             if match:
-                new_line = int(match.group(1))
-                changed.setdefault(current_path, set())
+                old_line = int(match.group(1))
+                new_line = int(match.group(3))
+                changed.setdefault(
+                    current_path,
+                    {"added_lines": set(), "removed_lines": set()},
+                )
         elif current_path and new_line is not None:
             if line.startswith("+") and not line.startswith("+++"):
-                changed[current_path].add(new_line)
+                changed[current_path]["added_lines"].add(new_line)
                 new_line += 1
+            elif line.startswith("-") and not line.startswith("---"):
+                changed[current_path]["removed_lines"].add(old_line)
+                old_line += 1
             elif line.startswith(" "):
+                old_line += 1
                 new_line += 1
 
     if target_commit is None:
@@ -129,14 +142,26 @@ def changed_python_lines(repository, base_commit, target_commit=None):
                 continue
             line_count = len(source.splitlines())
             if line_count:
-                changed.setdefault(path, set()).update(range(1, line_count + 1))
+                changed.setdefault(
+                    path,
+                    {"added_lines": set(), "removed_lines": set()},
+                )["added_lines"].update(range(1, line_count + 1))
 
-    return {path: lines for path, lines in changed.items() if path}
+    return {path: ranges for path, ranges in changed.items() if path}
+
+
+def changed_python_lines(repository, base_commit, target_commit=None):
+    return {
+        path: ranges["added_lines"]
+        for path, ranges in changed_python_line_ranges(
+            repository, base_commit, target_commit
+        ).items()
+    }
 
 
 def changed_symbols(repository, base_commit, target_commit=None):
     repository = Path(repository).resolve()
-    changed_lines = changed_python_lines(repository, base_commit, target_commit)
+    changed_ranges = changed_python_line_ranges(repository, base_commit, target_commit)
     symbols = []
     untracked = untracked_python_files(repository) if target_commit is None else set()
     deleted, renamed = (
@@ -150,7 +175,9 @@ def changed_symbols(repository, base_commit, target_commit=None):
         )
         deleted -= set(renamed.values())
 
-    for path, lines in changed_lines.items():
+    for path, ranges in changed_ranges.items():
+        added_lines = ranges["added_lines"]
+        removed_lines = ranges["removed_lines"]
         try:
             if target_commit is None:
                 source = (repository / path).read_text(encoding="utf-8")
@@ -159,32 +186,69 @@ def changed_symbols(repository, base_commit, target_commit=None):
         except (OSError, UnicodeDecodeError, subprocess.CalledProcessError):
             continue
 
-        for symbol in extract_symbols(source):
-            if symbol["kind"] not in {"function", "async_function"}:
-                continue
-            symbol_id = f"{path}::{symbol['qualname']}"
+        current_symbols = {
+            symbol["qualname"]: symbol
+            for symbol in extract_symbols(source)
+            if symbol["kind"] in {"function", "async_function"}
+        }
+        matched_symbols = {}
+        for symbol in current_symbols.values():
             affected_lines = [
                 line
-                for line in sorted(lines)
+                for line in sorted(added_lines)
                 if symbol["line_start"] <= line <= symbol["line_end"]
             ]
             if affected_lines:
-                changed_symbol = {
-                    "id": symbol_id,
-                    "path": path,
-                    "qualname": symbol["qualname"],
-                    "line_start": symbol["line_start"],
-                    "line_end": symbol["line_end"],
+                matched_symbols[symbol["qualname"]] = {
+                    **symbol,
                     "changed_lines": affected_lines,
                 }
-                if path in renamed:
-                    changed_symbol["change_type"] = "renamed"
-                    changed_symbol["previous_id"] = (
-                        f"{renamed[path]}::{symbol['qualname']}"
-                    )
-                elif path in untracked:
-                    changed_symbol["change_type"] = "added"
-                symbols.append(changed_symbol)
+
+        if removed_lines:
+            try:
+                old_source = run_git(repository, "show", f"{base_commit}:{path}")
+            except subprocess.CalledProcessError:
+                old_source = ""
+
+            for symbol in extract_symbols(old_source):
+                if symbol["kind"] not in {"function", "async_function"}:
+                    continue
+                removed = [
+                    line
+                    for line in sorted(removed_lines)
+                    if symbol["line_start"] <= line <= symbol["line_end"]
+                ]
+                if not removed:
+                    continue
+                current = current_symbols.get(symbol["qualname"])
+                matched_symbols.setdefault(
+                    symbol["qualname"],
+                    {
+                        **(current or symbol),
+                        "changed_lines": [],
+                    },
+                )["removed_lines"] = removed
+
+        for symbol in matched_symbols.values():
+            symbol_id = f"{path}::{symbol['qualname']}"
+            changed_symbol = {
+                "id": symbol_id,
+                "path": path,
+                "qualname": symbol["qualname"],
+                "line_start": symbol["line_start"],
+                "line_end": symbol["line_end"],
+                "changed_lines": symbol["changed_lines"],
+            }
+            if "removed_lines" in symbol:
+                changed_symbol["removed_lines"] = symbol["removed_lines"]
+            if path in renamed:
+                changed_symbol["change_type"] = "renamed"
+                changed_symbol["previous_id"] = (
+                    f"{renamed[path]}::{symbol['qualname']}"
+                )
+            elif path in untracked:
+                changed_symbol["change_type"] = "added"
+            symbols.append(changed_symbol)
 
     if target_commit is None:
         for path in sorted(deleted):
