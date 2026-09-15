@@ -57,6 +57,18 @@ python -m uvicorn api:app --reload
 
 The API provides `GET /health` and `POST /analyze`. FastAPI's interactive documentation is available at `http://127.0.0.1:8000/docs`.
 
+## Run the frontend
+
+Start the API first, then in a second terminal:
+
+```powershell
+cd frontend
+npm install --cache .npm-cache
+npm run dev
+```
+
+Open the local URL printed by Vite. The frontend sends analysis requests to the API through the development proxy.
+
 ## Main files
 
 - `analyzer.py` contains the Python parsing and dependency analysis.
@@ -64,6 +76,7 @@ The API provides `GET /health` and `POST /analyze`. FastAPI's interactive docume
 - `cli.py` formats an impact report for the terminal or as JSON.
 - `repository_loader.py` validates and temporarily clones public GitHub repositories.
 - `api.py` exposes the analyzer through FastAPI.
+- `frontend/` contains the React interface.
 - `pyproject.toml` contains project tool configuration.
 - `tests/` contains the tests.
 - `examples/` contains small repositories used by the tests and lessons.
@@ -74,7 +87,3 @@ ImpactLens analyzes Python source statically. It does not run the code, and it c
 Working-tree mode includes tracked and untracked Python changes. Deleted symbols are reported, but their remaining callers may be unresolved because the deleted code is absent from the current snapshot.
 Renames are detected from Git metadata or conservative file-content similarity; ambiguous cases may be reported as separate additions and deletions.
 Public GitHub repositories are limited to HTTPS URLs and a 100 MB cloned-repository size limit.
-
-## Planned work
-
-- build a React interface

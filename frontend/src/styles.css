@@ -1,0 +1,58 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1f2937;
+  background: #f6f8fa;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input { font: inherit; }
+
+.page { max-width: 1120px; margin: 0 auto; padding: 32px 28px 80px; }
+.site-header { display: flex; align-items: center; gap: 12px; }
+.brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; background: #163d56; color: white; font-size: 13px; font-weight: 800; }
+.site-header strong, .brand-subtitle { display: block; }
+.site-header strong { font-size: 16px; }
+.brand-subtitle { color: #6b7280; font-size: 12px; }
+.intro { max-width: 720px; margin: 76px 0 36px; }
+.eyebrow { margin: 0 0 12px; color: #3d7385; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+h1 { margin: 0; color: #172b3a; font-size: clamp(32px, 5vw, 52px); line-height: 1.1; letter-spacing: -.04em; }
+.intro > p:last-child { max-width: 660px; margin: 20px 0 0; color: #5d6974; font-size: 16px; line-height: 1.6; }
+.analysis-form, .report { border: 1px solid #dfe5e8; border-radius: 16px; background: white; box-shadow: 0 8px 24px rgba(22, 61, 86, .04); }
+.analysis-form { max-width: 720px; padding: 28px; }
+label { display: block; margin-bottom: 8px; color: #374151; font-size: 13px; font-weight: 700; }
+input { width: 100%; padding: 12px 14px; border: 1px solid #cad5db; border-radius: 8px; color: #1f2937; background: #fff; }
+input:focus { outline: 2px solid #75b6c6; outline-offset: 1px; }
+.commit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+button { margin-top: 24px; padding: 12px 20px; border: 0; border-radius: 8px; background: #163d56; color: white; font-weight: 700; cursor: pointer; }
+button:hover:not(:disabled) { background: #275a74; }
+button:disabled { opacity: .65; cursor: wait; }
+.error { margin: 18px 0 0; color: #a92323; line-height: 1.5; }
+.report { margin-top: 32px; padding: 28px; }
+.report-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; }
+.report-heading h2 { margin: 0; color: #172b3a; font-size: 28px; }
+.commit-pair { margin: 0; color: #687581; font-size: 12px; overflow-wrap: anywhere; }
+.caution { margin: 18px 0 28px; padding: 12px 16px; border-radius: 8px; background: #eef6f8; color: #416575; font-size: 13px; }
+.result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.result-section { min-width: 0; margin-bottom: 26px; }
+.section-heading { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #e5eaed; padding-bottom: 10px; }
+.section-heading h2 { margin: 0; color: #273a47; font-size: 16px; }
+.count { padding: 2px 7px; border-radius: 999px; background: #eaf0f3; color: #466071; font-size: 12px; font-weight: 700; }
+.result-list { margin: 0; padding: 0; list-style: none; }
+.result-list li { padding: 12px 0; border-bottom: 1px solid #eef1f2; overflow-wrap: anywhere; }
+.result-list li:last-child { border-bottom: 0; }
+.empty { margin: 12px 0 0; color: #89939b; font-size: 13px; }
+code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+.detail { display: block; margin-top: 5px; color: #7a8790; font-size: 12px; }
+.method { margin-right: 5px; color: #2d6678; font-size: 11px; font-weight: 800; }
+.path { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.arrow { margin: 0 8px; color: #8ca0aa; }
+
+@media (max-width: 700px) {
+  .page { padding: 24px 16px 64px; }
+  .intro { margin-top: 56px; }
+  .analysis-form, .report { padding: 20px; }
+  .commit-fields, .result-grid { grid-template-columns: 1fr; }
+  .report-heading { display: block; }
+  .commit-pair { margin-top: 12px; }
+}

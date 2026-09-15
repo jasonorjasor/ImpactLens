@@ -5,3 +5,6 @@ __pycache__/
 .env
 lesson*.py
 .pytest-temp-loader/
+frontend/node_modules/
+frontend/dist/
+frontend/.npm-cache/

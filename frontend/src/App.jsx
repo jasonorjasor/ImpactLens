@@ -1,0 +1,206 @@
+import { useState } from 'react'
+
+const initialForm = {
+  repository: '',
+  base_commit: '',
+  target_commit: '',
+}
+
+function isTestIdentifier(identifier) {
+  const path = identifier.split('::', 1)[0]
+  const parts = path.split('/')
+  const file = parts[parts.length - 1]
+  return parts.includes('tests') || file.startsWith('test_') || file.endsWith('_test.py')
+}
+
+function Section({ title, items, renderItem }) {
+  return (
+    <section className="result-section">
+      <div className="section-heading">
+        <h2>{title}</h2>
+        <span className="count">{items.length}</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="empty">None found</p>
+      ) : (
+        <ul className="result-list">
+          {items.map((item, index) => (
+            <li key={index}>{renderItem(item)}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function Report({ report }) {
+  return (
+    <div className="report">
+      <div className="report-heading">
+        <div>
+          <p className="eyebrow">Analysis result</p>
+          <h2>Potential impact</h2>
+        </div>
+        <p className="commit-pair">
+          <code>{report.base_commit}</code> → <code>{report.target_commit}</code>
+        </p>
+      </div>
+      <p className="caution">
+        These are possible impacts found from Python source. ImpactLens does not run the code.
+      </p>
+      <div className="result-grid">
+        <Section
+          title="Changed functions"
+          items={report.changed_symbols}
+          renderItem={(symbol) => (
+            <>
+              <code>{symbol.id}</code>
+              {symbol.changed_lines?.length > 0 && (
+                <span className="detail">Lines {symbol.changed_lines.join(', ')}</span>
+              )}
+            </>
+          )}
+        />
+        <Section
+          title="Affected routes"
+          items={report.affected_routes}
+          renderItem={(route) => (
+            <>
+              <span className="method">{route.method}</span> <code>{route.path}</code>
+              <span className="detail">{route.symbol_id}</span>
+            </>
+          )}
+        />
+        <Section
+          title="Related tests"
+          items={report.related_tests}
+          renderItem={(test) => <code>{test}</code>}
+        />
+        <Section
+          title="Affected code"
+          items={report.affected_symbols.filter(
+            (symbol) => !isTestIdentifier(symbol),
+          )}
+          renderItem={(symbol) => <code>{symbol}</code>}
+        />
+      </div>
+      <Section
+        title="Impact paths"
+        items={report.evidence_paths}
+        renderItem={(path) => (
+          <div className="path">
+            {path.map((symbol, index) => (
+              <span key={index}>
+                {index > 0 && <span className="arrow">→</span>}
+                <code>{symbol}</code>
+              </span>
+            ))}
+          </div>
+        )}
+      />
+    </div>
+  )
+}
+
+export default function App() {
+  const [form, setForm] = useState(initialForm)
+  const [report, setReport] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  function updateField(event) {
+    setForm({ ...form, [event.target.name]: event.target.value })
+  }
+
+  async function submit(event) {
+    event.preventDefault()
+    setError('')
+    setReport(null)
+    setLoading(true)
+
+    try {
+      const response = await fetch('/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repository: form.repository.trim(),
+          base_commit: form.base_commit.trim(),
+          target_commit: form.target_commit.trim(),
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(typeof data.detail === 'string' ? data.detail : 'Analysis failed')
+      }
+      setReport(data)
+    } catch (caught) {
+      setError(caught.message || 'Could not reach the API')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <main className="page">
+      <header className="site-header">
+        <div className="brand-mark">IL</div>
+        <div>
+          <strong>ImpactLens</strong>
+          <span className="brand-subtitle">Python change analysis</span>
+        </div>
+      </header>
+
+      <div className="intro">
+        <p className="eyebrow">Compare two commits</p>
+        <h1>See what a code change might affect.</h1>
+        <p>
+          Enter a public Python GitHub repository and two commits. ImpactLens follows
+          function calls to show related routes, tests, and the paths connecting them.
+        </p>
+      </div>
+
+      <form className="analysis-form" onSubmit={submit}>
+        <label htmlFor="repository">GitHub repository</label>
+        <input
+          id="repository"
+          name="repository"
+          type="url"
+          placeholder="https://github.com/owner/repository"
+          value={form.repository}
+          onChange={updateField}
+          required
+        />
+        <div className="commit-fields">
+          <div>
+            <label htmlFor="base_commit">Base commit</label>
+            <input
+              id="base_commit"
+              name="base_commit"
+              placeholder="Older commit SHA"
+              value={form.base_commit}
+              onChange={updateField}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="target_commit">Target commit</label>
+            <input
+              id="target_commit"
+              name="target_commit"
+              placeholder="Newer commit SHA"
+              value={form.target_commit}
+              onChange={updateField}
+              required
+            />
+          </div>
+        </div>
+        <button type="submit" disabled={loading}>
+          {loading ? 'Analyzing…' : 'Analyze changes'}
+        </button>
+        {error && <p className="error" role="alert">{error}</p>}
+      </form>
+
+      {report && <Report report={report} />}
+    </main>
+  )
+}
