@@ -29,6 +29,7 @@ def sample_report():
         "historical_impact": {
             "affected_symbols": [], "affected_routes": [], "related_tests": [],
         },
+        "analysis_errors": [],
     }
 
 
@@ -133,3 +134,16 @@ def test_format_report_labels_historical_results():
     assert "Historical routes (1)" in output
     assert "Historical related tests (1)" in output
     assert "[base, historical] auth.py::verify_user -> services.py::login" in output
+
+
+def test_format_report_shows_unanalyzed_files():
+    report = sample_report()
+    report["analysis_errors"] = [{
+        "source": "target", "path": "broken.py", "error": "invalid syntax",
+    }]
+
+    output = cli.format_report(report)
+
+    assert "Files not analyzed (1)" in output
+    assert "[target] broken.py: invalid syntax" in output
+    assert "Results may be incomplete." in output

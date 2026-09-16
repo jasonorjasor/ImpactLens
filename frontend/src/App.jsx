@@ -123,6 +123,21 @@ export function Report({ report }) {
           </div>
         )}
       />
+      {report.analysis_errors?.length > 0 && (
+        <>
+          <p className="caution">Some files could not be analyzed. Results may be incomplete.</p>
+          <Section
+            title="Files not analyzed"
+            items={report.analysis_errors}
+            renderItem={(item) => (
+              <>
+                <code>{item.path}</code>
+                <span className="detail">{item.source} version: {item.error}</span>
+              </>
+            )}
+          />
+        </>
+      )}
     </div>
   )
 }

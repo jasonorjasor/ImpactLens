@@ -202,3 +202,29 @@ def test_deleted_routes_and_tests_are_only_historical(deletion_repository):
     assert report["related_tests"] == []
     assert report["historical_impact"]["affected_routes"][0]["path"] == "/login"
     assert report["historical_impact"]["related_tests"] == ["tests/test_login.py::test_login"]
+
+
+def test_reports_parse_errors_from_both_versions(deletion_repository):
+    repository, base = deletion_repository
+    (repository / "broken.py").write_text("def unfinished(:\n", encoding="utf-8")
+    run_git(repository, "add", "broken.py")
+    run_git(repository, "commit", "-m", "add broken file")
+    base = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+
+    (repository / "auth.py").unlink()
+    (repository / "new_broken.py").write_text("def also_unfinished(:\n", encoding="utf-8")
+    run_git(repository, "add", "-A")
+    run_git(repository, "commit", "-m", "delete auth and add invalid file")
+    target = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+
+    report = analyze_change(repository, base, target)
+
+    assert {symbol["id"] for symbol in report["changed_symbols"]} == {
+        "auth.py::verify_user", "auth.py::keep",
+    }
+    assert {(item["source"], item["path"]) for item in report["analysis_errors"]} == {
+        ("base", "broken.py"),
+        ("target", "broken.py"),
+        ("target", "new_broken.py"),
+    }
+    assert all(item["error"] for item in report["analysis_errors"])

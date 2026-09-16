@@ -91,6 +91,15 @@ def format_report(report, max_paths=20):
         remaining = len(paths) - len(visible_paths)
         lines.append(f"- {remaining} more paths (use --all-paths)")
 
+    errors = report["analysis_errors"]
+    if errors:
+        lines.extend(["", f"Files not analyzed ({len(errors)})"])
+        lines.extend(
+            f"- [{item['source']}] {item['path']}: {item['error']}"
+            for item in errors
+        )
+        lines.append("Results may be incomplete.")
+
     return "\n".join(lines)
 
 

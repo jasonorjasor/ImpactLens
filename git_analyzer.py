@@ -183,11 +183,14 @@ def changed_symbols(repository, base_commit, target_commit=None):
         except (OSError, UnicodeDecodeError, subprocess.CalledProcessError):
             continue
 
-        current_symbols = {
-            symbol["qualname"]: symbol
-            for symbol in extract_symbols(source)
-            if symbol["kind"] in {"function", "async_function"}
-        }
+        try:
+            current_symbols = {
+                symbol["qualname"]: symbol
+                for symbol in extract_symbols(source)
+                if symbol["kind"] in {"function", "async_function"}
+            }
+        except SyntaxError:
+            continue
         matched_symbols = {}
         for symbol in current_symbols.values():
             affected_lines = [
@@ -207,7 +210,12 @@ def changed_symbols(repository, base_commit, target_commit=None):
             except subprocess.CalledProcessError:
                 old_source = ""
 
-            for symbol in extract_symbols(old_source):
+            try:
+                old_symbols = extract_symbols(old_source)
+            except SyntaxError:
+                old_symbols = []
+
+            for symbol in old_symbols:
                 if symbol["kind"] not in {"function", "async_function"}:
                     continue
                 removed = [
@@ -329,6 +337,11 @@ def analyze_change(repository, base_commit, target_commit=None):
         "historical_impact": summarize_impact(
             reports.get("base", {"files": []}), changed_ids["base"], affected["base"]
         ),
+        "analysis_errors": [
+            {"source": source, **error}
+            for source, report in reports.items()
+            for error in report["errors"]
+        ],
     }
 
 

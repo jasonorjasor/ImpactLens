@@ -53,6 +53,7 @@ Their former callers, routes, and tests appear as historical results. Those depe
 In JSON reports, `evidence_paths` and each function's `impact_paths` contain objects with `source` (`base` or `target`) and a `symbols` list.
 The top-level affected symbols, routes, and tests use target-version evidence. `historical_impact` contains the same three lists using base-version evidence.
 `changed_lines` refers to the target version; `removed_lines` refers to the base version. Deleted functions' start and end lines refer to the base version.
+If a Python file cannot be parsed, `analysis_errors` names the file and version. The report may be incomplete.
 
 ## Run the API
 
@@ -63,6 +64,7 @@ python -m uvicorn api:app --reload
 ```
 
 The API provides `GET /health` and `POST /analyze`. FastAPI's interactive documentation is available at `http://127.0.0.1:8000/docs`.
+`POST /analyze` validates its response against the report model before returning JSON. Invalid requests return 422; repository loading errors return 400.
 
 ## Run the frontend
 
