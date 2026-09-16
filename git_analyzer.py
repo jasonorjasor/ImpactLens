@@ -36,16 +36,11 @@ def untracked_python_files(repository):
     return {path for path in output.splitlines() if path}
 
 
-def working_tree_file_changes(repository, base_commit):
-    output = run_git(
-        repository,
-        "diff",
-        "--name-status",
-        "--find-renames",
-        base_commit,
-        "--",
-        "*.py",
-    )
+def python_file_changes(repository, base_commit, target_commit=None):
+    arguments = ["diff", "--name-status", "--find-renames", base_commit]
+    if target_commit is not None:
+        arguments.append(target_commit)
+    output = run_git(repository, *arguments, "--", "*.py")
     deleted = set()
     renamed = {}
 
@@ -105,29 +100,31 @@ def changed_python_line_ranges(repository, base_commit, target_commit=None):
     current_path = None
     old_line = None
     new_line = None
-    pattern = re.compile(
-        r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@"
-    )
+    pattern = re.compile(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
     for line in diff.splitlines():
-        if line.startswith("--- a/"):
+        if line.startswith("diff --git "):
+            current_path = None
+            old_line = None
+            new_line = None
+        elif old_line is None and line.startswith("--- a/"):
             current_path = line[6:]
-        elif line.startswith("+++ b/"):
+        elif old_line is None and line.startswith("+++ b/"):
             current_path = line[6:]
         elif line.startswith("@@"):
             match = pattern.match(line)
             if match:
                 old_line = int(match.group(1))
-                new_line = int(match.group(3))
+                new_line = int(match.group(2))
                 changed.setdefault(
                     current_path,
                     {"added_lines": set(), "removed_lines": set()},
                 )
         elif current_path and new_line is not None:
-            if line.startswith("+") and not line.startswith("+++"):
+            if line.startswith("+"):
                 changed[current_path]["added_lines"].add(new_line)
                 new_line += 1
-            elif line.startswith("-") and not line.startswith("---"):
+            elif line.startswith("-"):
                 changed[current_path]["removed_lines"].add(old_line)
                 old_line += 1
             elif line.startswith(" "):
@@ -164,22 +161,22 @@ def changed_symbols(repository, base_commit, target_commit=None):
     changed_ranges = changed_python_line_ranges(repository, base_commit, target_commit)
     symbols = []
     untracked = untracked_python_files(repository) if target_commit is None else set()
-    deleted, renamed = (
-        working_tree_file_changes(repository, base_commit)
-        if target_commit is None
-        else (set(), {})
-    )
+    deleted, renamed = python_file_changes(repository, base_commit, target_commit)
     if target_commit is None:
         renamed.update(
             detect_untracked_renames(repository, base_commit, deleted, untracked)
         )
-        deleted -= set(renamed.values())
+    renamed_sources = set(renamed.values())
 
     for path, ranges in changed_ranges.items():
+        if path in renamed_sources:
+            continue
         added_lines = ranges["added_lines"]
         removed_lines = ranges["removed_lines"]
         try:
-            if target_commit is None:
+            if path in deleted:
+                source = ""
+            elif target_commit is None:
                 source = (repository / path).read_text(encoding="utf-8")
             else:
                 source = run_git(repository, "show", f"{target_commit}:{path}")
@@ -241,7 +238,9 @@ def changed_symbols(repository, base_commit, target_commit=None):
             }
             if "removed_lines" in symbol:
                 changed_symbol["removed_lines"] = symbol["removed_lines"]
-            if path in renamed:
+            if symbol["qualname"] not in current_symbols:
+                changed_symbol["change_type"] = "deleted"
+            elif path in renamed:
                 changed_symbol["change_type"] = "renamed"
                 changed_symbol["previous_id"] = (
                     f"{renamed[path]}::{symbol['qualname']}"
@@ -249,28 +248,6 @@ def changed_symbols(repository, base_commit, target_commit=None):
             elif path in untracked:
                 changed_symbol["change_type"] = "added"
             symbols.append(changed_symbol)
-
-    if target_commit is None:
-        for path in sorted(deleted):
-            try:
-                source = run_git(repository, "show", f"{base_commit}:{path}")
-            except subprocess.CalledProcessError:
-                continue
-
-            for symbol in extract_symbols(source):
-                if symbol["kind"] not in {"function", "async_function"}:
-                    continue
-                symbols.append(
-                    {
-                        "id": f"{path}::{symbol['qualname']}",
-                        "path": path,
-                        "qualname": symbol["qualname"],
-                        "line_start": symbol["line_start"],
-                        "line_end": symbol["line_end"],
-                        "changed_lines": [],
-                        "change_type": "deleted",
-                    }
-                )
 
     return symbols
 
@@ -288,50 +265,70 @@ def analyze_commit(repository, commit=None):
     return analyze_sources(sources)
 
 
-def analyze_change(repository, base_commit, target_commit=None):
-    changed = changed_symbols(repository, base_commit, target_commit)
-    target_report = analyze_commit(repository, target_commit)
-    calls = [call for file in target_report["files"] for call in file["calls"]]
-    graph = build_reverse_graph(calls)
-    evidence_paths = []
-    affected_symbols = []
-
-    for symbol in changed:
-        paths = find_impact_paths(symbol["id"], graph)
-        symbol["impact_paths"] = paths
-        for path in paths:
-            if path not in evidence_paths:
-                evidence_paths.append(path)
-            for identifier in path[1:]:
-                if identifier not in affected_symbols:
-                    affected_symbols.append(identifier)
-
-    impacted_ids = [symbol["id"] for symbol in changed] + affected_symbols
+def summarize_impact(report, changed_ids, affected_symbols):
+    impacted_ids = set(changed_ids) | set(affected_symbols)
     affected_routes = [
         {
             "symbol_id": route["id"],
             "method": route["method"],
             "path": route["path"],
         }
-        for file in target_report["files"]
+        for file in report["files"]
         for route in file["routes"]
         if route["id"] in impacted_ids
     ]
     related_tests = [
         test["id"]
-        for file in target_report["files"]
+        for file in report["files"]
         for test in file["tests"]
         if test["id"] in impacted_ids
     ]
 
     return {
+        "affected_symbols": affected_symbols,
+        "affected_routes": affected_routes,
+        "related_tests": related_tests,
+    }
+
+
+def analyze_change(repository, base_commit, target_commit=None):
+    changed = changed_symbols(repository, base_commit, target_commit)
+    reports = {"target": analyze_commit(repository, target_commit)}
+    if any(symbol.get("change_type") == "deleted" for symbol in changed):
+        reports["base"] = analyze_commit(repository, base_commit)
+    graphs = {
+        source: build_reverse_graph([
+            call for file in report["files"] for call in file["calls"]
+        ])
+        for source, report in reports.items()
+    }
+    evidence_paths = []
+    affected = {"base": [], "target": []}
+    changed_ids = {"base": [], "target": []}
+
+    for symbol in changed:
+        source = "base" if symbol.get("change_type") == "deleted" else "target"
+        changed_ids[source].append(symbol["id"])
+        paths = find_impact_paths(symbol["id"], graphs[source])
+        symbol["impact_paths"] = [
+            {"source": source, "symbols": path} for path in paths
+        ]
+        for evidence in symbol["impact_paths"]:
+            if evidence not in evidence_paths:
+                evidence_paths.append(evidence)
+            for identifier in evidence["symbols"][1:]:
+                if identifier not in affected[source]:
+                    affected[source].append(identifier)
+
+    return {
         "base_commit": base_commit,
         "target_commit": target_commit or "WORKING_TREE",
         "changed_symbols": changed,
-        "affected_symbols": affected_symbols,
         "evidence_paths": evidence_paths,
-        "affected_routes": affected_routes,
-        "related_tests": related_tests,
+        **summarize_impact(reports["target"], changed_ids["target"], affected["target"]),
+        "historical_impact": summarize_impact(
+            reports.get("base", {"files": []}), changed_ids["base"], affected["base"]
+        ),
     }
 
 

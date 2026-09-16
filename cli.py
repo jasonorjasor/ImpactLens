@@ -16,6 +16,34 @@ def is_test_identifier(identifier):
     )
 
 
+def format_impact_sections(report, historical=False):
+    related_tests = set(report["related_tests"])
+    affected = [
+        symbol for symbol in report["affected_symbols"]
+        if symbol not in related_tests and not is_test_identifier(symbol)
+    ]
+    code_title = "Historical callers" if historical else "Affected code symbols"
+    lines = ["", f"{code_title} ({len(affected)})"]
+    lines.extend(f"- {symbol}" for symbol in affected or ["none"])
+
+    routes = report["affected_routes"]
+    route_title = "Historical routes" if historical else "Affected routes"
+    lines.extend(["", f"{route_title} ({len(routes)})"])
+    if routes:
+        lines.extend(
+            f"- {route['method']} {route['path']} ({route['symbol_id']})"
+            for route in routes
+        )
+    else:
+        lines.append("- none")
+
+    tests = report["related_tests"]
+    test_title = "Historical related tests" if historical else "Related tests"
+    lines.extend(["", f"{test_title} ({len(tests)})"])
+    lines.extend(f"- {test}" for test in tests or ["none"])
+    return lines
+
+
 def format_report(report, max_paths=20):
     lines = [
         "ImpactLens",
@@ -37,39 +65,26 @@ def format_report(report, max_paths=20):
                     str(line) for line in symbol["changed_lines"]
                 )
                 details.append(f"lines: {changed_lines}")
+            if symbol.get("removed_lines"):
+                removed_lines = ", ".join(str(line) for line in symbol["removed_lines"])
+                details.append(f"removed lines (base): {removed_lines}")
             detail = f" ({'; '.join(details)})" if details else ""
             lines.append(f"- {symbol['id']}{detail}")
     else:
         lines.append("- none")
 
-    related_tests = set(report["related_tests"])
-    affected = [
-        symbol
-        for symbol in report["affected_symbols"]
-        if symbol not in related_tests and not is_test_identifier(symbol)
-    ]
-    lines.extend(["", f"Affected code symbols ({len(affected)})"])
-    lines.extend(f"- {symbol}" for symbol in affected or ["none"])
-
-    routes = report["affected_routes"]
-    lines.extend(["", f"Affected routes ({len(routes)})"])
-    if routes:
-        lines.extend(
-            f"- {route['method']} {route['path']} ({route['symbol_id']})"
-            for route in routes
-        )
-    else:
-        lines.append("- none")
-
-    tests = report["related_tests"]
-    lines.extend(["", f"Related tests ({len(tests)})"])
-    lines.extend(f"- {test}" for test in tests or ["none"])
-
+    lines.extend(["Results from the target version:"])
+    lines.extend(format_impact_sections(report))
     paths = report["evidence_paths"]
+    if any(path["source"] == "base" for path in paths):
+        lines.extend(["", "Historical results come from the base version; they may no longer exist or depend on the deleted code."])
+        lines.extend(format_impact_sections(report["historical_impact"], historical=True))
     lines.extend(["", f"Impact paths ({len(paths)})"])
     visible_paths = paths if max_paths is None else paths[:max_paths]
     if visible_paths:
-        lines.extend(f"- {' -> '.join(path)}" for path in visible_paths)
+        for path in visible_paths:
+            label = "base, historical" if path["source"] == "base" else "target"
+            lines.append(f"- [{label}] {' -> '.join(path['symbols'])}")
     else:
         lines.append("- none")
     if len(visible_paths) < len(paths):

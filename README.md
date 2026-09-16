@@ -47,6 +47,13 @@ python cli.py PATH_TO_REPOSITORY BASE_COMMIT TARGET_COMMIT --json
 
 Human-readable output shows up to 20 impact paths by default. Use `--all-paths` to show the full list.
 
+Deleted functions are matched against the base version, including when a whole file is removed.
+Their former callers, routes, and tests appear as historical results. Those dependencies may no longer exist in the target version.
+
+In JSON reports, `evidence_paths` and each function's `impact_paths` contain objects with `source` (`base` or `target`) and a `symbols` list.
+The top-level affected symbols, routes, and tests use target-version evidence. `historical_impact` contains the same three lists using base-version evidence.
+`changed_lines` refers to the target version; `removed_lines` refers to the base version. Deleted functions' start and end lines refer to the base version.
+
 ## Run the API
 
 Start the development server:
@@ -84,6 +91,6 @@ Open the local URL printed by Vite. The frontend sends analysis requests to the 
 ## Current limitations
 
 ImpactLens analyzes Python source statically. It does not run the code, and it cannot always resolve dynamic calls, reflection, or code generated at runtime.
-Working-tree mode includes tracked and untracked Python changes. Deleted symbols are reported, but their remaining callers may be unresolved because the deleted code is absent from the current snapshot.
+Working-tree mode includes tracked and untracked Python changes saved to disk. Unsaved editor changes are not included.
 Renames are detected from Git metadata or conservative file-content similarity; ambiguous cases may be reported as separate additions and deletions.
 Public GitHub repositories are limited to HTTPS URLs and a 100 MB cloned-repository size limit.

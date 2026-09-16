@@ -24,8 +24,11 @@ def sample_report():
         ],
         "related_tests": ["tests/test_login.py::test_login_route"],
         "evidence_paths": [
-            ["auth.py::verify_user", "services.py::login"]
+            {"source": "target", "symbols": ["auth.py::verify_user", "services.py::login"]}
         ],
+        "historical_impact": {
+            "affected_symbols": [], "affected_routes": [], "related_tests": [],
+        },
     }
 
 
@@ -54,7 +57,9 @@ def test_main_can_print_json(monkeypatch, capsys, tmp_path):
 
 def test_main_can_show_all_impact_paths(monkeypatch, capsys, tmp_path):
     report = sample_report()
-    report["evidence_paths"] = [[f"symbol_{index}"] for index in range(21)]
+    report["evidence_paths"] = [
+        {"source": "target", "symbols": [f"symbol_{index}"]} for index in range(21)
+    ]
     monkeypatch.setattr(cli, "analyze_change", lambda *args: report)
 
     assert cli.main([str(tmp_path), "old", "new", "--all-paths"]) == 0
@@ -66,7 +71,9 @@ def test_main_can_show_all_impact_paths(monkeypatch, capsys, tmp_path):
 
 def test_format_report_limits_paths_by_default():
     report = sample_report()
-    report["evidence_paths"] = [[f"symbol_{index}"] for index in range(21)]
+    report["evidence_paths"] = [
+        {"source": "target", "symbols": [f"symbol_{index}"]} for index in range(21)
+    ]
 
     output = cli.format_report(report)
 
@@ -104,3 +111,25 @@ def test_main_can_analyze_the_working_tree(monkeypatch, capsys, tmp_path):
 
     assert calls == [(tmp_path.resolve(), "HEAD")]
     assert "Comparison: old -> new" in capsys.readouterr().out
+
+
+def test_format_report_labels_historical_results():
+    report = sample_report()
+    report["changed_symbols"] = [{
+        "id": "auth.py::verify_user", "change_type": "deleted",
+        "changed_lines": [], "removed_lines": [1, 2],
+    }]
+    report["historical_impact"] = {
+        key: report[key] for key in ["affected_symbols", "affected_routes", "related_tests"]
+    }
+    for key in report["historical_impact"]:
+        report[key] = []
+    report["evidence_paths"][0]["source"] = "base"
+
+    output = cli.format_report(report)
+
+    assert "deleted; removed lines (base): 1, 2" in output
+    assert "Affected routes (0)" in output
+    assert "Historical routes (1)" in output
+    assert "Historical related tests (1)" in output
+    assert "[base, historical] auth.py::verify_user -> services.py::login" in output

@@ -33,7 +33,34 @@ function Section({ title, items, renderItem }) {
   )
 }
 
-function Report({ report }) {
+function ImpactSummary({ report, historical = false }) {
+  return (
+    <div className="result-grid">
+      <Section
+        title={historical ? 'Historical routes' : 'Affected routes'}
+        items={report.affected_routes}
+        renderItem={(route) => (
+          <>
+            <span className="method">{route.method}</span> <code>{route.path}</code>
+            <span className="detail">{route.symbol_id}</span>
+          </>
+        )}
+      />
+      <Section
+        title={historical ? 'Historical related tests' : 'Related tests'}
+        items={report.related_tests}
+        renderItem={(test) => <code>{test}</code>}
+      />
+      <Section
+        title={historical ? 'Historical callers' : 'Affected code'}
+        items={report.affected_symbols.filter((symbol) => !isTestIdentifier(symbol))}
+        renderItem={(symbol) => <code>{symbol}</code>}
+      />
+    </div>
+  )
+}
+
+export function Report({ report }) {
   return (
     <div className="report">
       <div className="report-heading">
@@ -55,46 +82,39 @@ function Report({ report }) {
           renderItem={(symbol) => (
             <>
               <code>{symbol.id}</code>
+              {symbol.change_type && <span className="detail">{symbol.change_type}</span>}
               {symbol.changed_lines?.length > 0 && (
                 <span className="detail">Lines {symbol.changed_lines.join(', ')}</span>
               )}
               {symbol.removed_lines?.length > 0 && (
                 <span className="detail">
-                  Removed lines {symbol.removed_lines.join(', ')}
+                  Removed lines (base version): {symbol.removed_lines.join(', ')}
                 </span>
               )}
             </>
           )}
         />
-        <Section
-          title="Affected routes"
-          items={report.affected_routes}
-          renderItem={(route) => (
-            <>
-              <span className="method">{route.method}</span> <code>{route.path}</code>
-              <span className="detail">{route.symbol_id}</span>
-            </>
-          )}
-        />
-        <Section
-          title="Related tests"
-          items={report.related_tests}
-          renderItem={(test) => <code>{test}</code>}
-        />
-        <Section
-          title="Affected code"
-          items={report.affected_symbols.filter(
-            (symbol) => !isTestIdentifier(symbol),
-          )}
-          renderItem={(symbol) => <code>{symbol}</code>}
-        />
       </div>
+      <p>Results from the target version:</p>
+      <ImpactSummary report={report} />
+      {report.evidence_paths.some((path) => path.source === 'base') && (
+        <>
+          <p className="caution">
+            Historical results come from the base version. These functions, routes,
+            and tests may no longer exist or depend on the deleted code.
+          </p>
+          <ImpactSummary report={report.historical_impact} historical />
+        </>
+      )}
       <Section
         title="Impact paths"
         items={report.evidence_paths}
         renderItem={(path) => (
           <div className="path">
-            {path.map((symbol, index) => (
+            <span className="detail">
+              {path.source === 'base' ? 'Base version (historical)' : 'Target version'}
+            </span>
+            {path.symbols.map((symbol, index) => (
               <span key={index}>
                 {index > 0 && <span className="arrow">→</span>}
                 <code>{symbol}</code>
