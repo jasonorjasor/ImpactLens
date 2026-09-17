@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { requestAnalysis } from './api.js'
 
 const initialForm = {
   repository: '',
@@ -180,19 +181,11 @@ export default function App() {
     setLoading(true)
 
     try {
-      const response = await fetch('/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repository: form.repository.trim(),
-          base_commit: form.base_commit.trim(),
-          target_commit: form.target_commit.trim(),
-        }),
+      const data = await requestAnalysis({
+        repository: form.repository.trim(),
+        base_commit: form.base_commit.trim(),
+        target_commit: form.target_commit.trim(),
       })
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(typeof data.detail === 'string' ? data.detail : 'Analysis failed')
-      }
       setReport(data)
     } catch (caught) {
       setError(caught.message || 'Could not reach the API')

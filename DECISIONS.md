@@ -21,14 +21,15 @@ ImpactLens helps a developer review a Python code change by showing changed func
 11. **Show parse failures instead of silently claiming a complete report.** Invalid Python files can leave gaps in analysis. We return file/version errors and validate API reports so callers can distinguish incomplete results from a clean result.
 12. **Clarify the report before adding more analysis.** New functions are labeled `added` by comparing old and new symbols. A path needs at least one caller; an isolated changed function remains in Changed functions. Directly changed routes and tests are distinguished from reached ones, and tests are not listed twice. This makes the current evidence easier to interpret without changing the core graph.
 
-## Decisions from this change
+## Later decisions
 
 13. **Keep this file in the repository.** It stays beside the code, can be reviewed in GitHub, and can be updated in the same commit as a change. We will record the choice, reason, meaningful alternative, and limitation when we implement something new.
 14. **Add a focused frontend report test with Node's built-in test runner.** The Python suite checks analysis and API behavior but cannot catch a misleading browser label or count. A server-rendered component test checks those report rules without adding a test framework dependency. It does not replace a future browser interaction test.
+15. **Translate expected loading failures into useful messages.** A real browser run against this public repository succeeded, but an invalid commit exposed raw Git text and an unavailable API exposed a JSON parsing error. The loader now keeps the original Git error as a cause but returns a short explanation for clone/fetch failures. The frontend handles connection and non-JSON responses separately. This loses some low-level detail in the UI; preserving it in the exception chain keeps debugging possible without showing temporary paths to users.
 
 ## Next checkpoints
 
-1. Exercise the full web request with realistic repositories and errors, looking for confusing or incomplete states before adding more features.
-2. Before public deployment, review limits for clone size, request time, and concurrent analysis. Those are operational safeguards, not a reason to expand language support yet.
+1. Before public deployment, review limits for clone size, request time, and concurrent analysis. Those are operational safeguards, not a reason to expand language support yet.
+2. If browser interactions grow, add an automated browser test. Component and request tests protect current behavior, but they do not automate every click-through scenario.
 
 We should revisit a decision when a real example or test shows it is not serving the project. The point of this file is to explain choices, not defend them forever.

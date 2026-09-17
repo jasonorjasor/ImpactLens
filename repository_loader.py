@@ -98,17 +98,24 @@ def _ensure_commit(repository, commit):
         return
     if not commit or commit.startswith("-"):
         raise RepositoryLoadError(f"Invalid commit reference: {commit}")
-    _run_command(
-        [
-            "git",
-            "-C",
-            str(repository),
-            "fetch",
-            "--no-tags",
-            "origin",
-            commit,
-        ]
-    )
+    try:
+        _run_command(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "fetch",
+                "--no-tags",
+                "origin",
+                commit,
+            ]
+        )
+    except RepositoryLoadError as error:
+        if isinstance(error.__cause__, subprocess.CalledProcessError):
+            raise RepositoryLoadError(
+                f"Could not find or fetch commit '{commit}'. Check the commit and your connection."
+            ) from error
+        raise
     if not _commit_exists(repository, commit):
         raise RepositoryLoadError(f"Commit not found: {commit}")
 
@@ -137,16 +144,23 @@ def open_repository(location, base_commit=None, target_commit=None, max_bytes=MA
 
     with tempfile.TemporaryDirectory(prefix="impactlens-") as temporary_directory:
         repository = Path(temporary_directory) / "repository"
-        _run_command(
-            [
-                "git",
-                "clone",
-                "--no-tags",
-                "--filter=blob:none",
-                repository_url,
-                str(repository),
-            ]
-        )
+        try:
+            _run_command(
+                [
+                    "git",
+                    "clone",
+                    "--no-tags",
+                    "--filter=blob:none",
+                    repository_url,
+                    str(repository),
+                ]
+            )
+        except RepositoryLoadError as error:
+            if isinstance(error.__cause__, subprocess.CalledProcessError):
+                raise RepositoryLoadError(
+                    "Could not access this public GitHub repository. Check the URL and your connection."
+                ) from error
+            raise
         _run_command(
             [
                 "git",
