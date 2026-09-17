@@ -16,11 +16,14 @@ def is_test_identifier(identifier):
     )
 
 
-def format_impact_sections(report, historical=False):
+def format_impact_sections(report, historical=False, changed_ids=()):
+    changed_ids = set(changed_ids)
     related_tests = set(report["related_tests"])
     affected = [
         symbol for symbol in report["affected_symbols"]
-        if symbol not in related_tests and not is_test_identifier(symbol)
+        if symbol not in changed_ids
+        and symbol not in related_tests
+        and not is_test_identifier(symbol)
     ]
     code_title = "Historical callers" if historical else "Affected code symbols"
     lines = ["", f"{code_title} ({len(affected)})"]
@@ -31,16 +34,20 @@ def format_impact_sections(report, historical=False):
     lines.extend(["", f"{route_title} ({len(routes)})"])
     if routes:
         lines.extend(
-            f"- {route['method']} {route['path']} ({route['symbol_id']})"
+            f"- {route['method']} {route['path']} "
+            f"({route['symbol_id']}; "
+            f"{'changed directly' if route['symbol_id'] in changed_ids else 'reached via calls'})"
             for route in routes
         )
     else:
         lines.append("- none")
 
-    tests = report["related_tests"]
+    tests = [test for test in report["related_tests"] if test not in changed_ids]
     test_title = "Historical related tests" if historical else "Related tests"
     lines.extend(["", f"{test_title} ({len(tests)})"])
-    lines.extend(f"- {test}" for test in tests or ["none"])
+    lines.extend(f"- {test} (reached via calls)" for test in tests)
+    if not tests:
+        lines.append("- changed tests are listed above" if related_tests else "- none")
     return lines
 
 
@@ -52,6 +59,12 @@ def format_report(report, max_paths=20):
     ]
 
     changed = report["changed_symbols"]
+    target_changed_ids = {
+        symbol["id"] for symbol in changed if symbol.get("change_type") != "deleted"
+    }
+    base_changed_ids = {
+        symbol["id"] for symbol in changed if symbol.get("change_type") == "deleted"
+    }
     lines.append(f"Changed symbols ({len(changed)})")
     if changed:
         for symbol in changed:
@@ -74,11 +87,13 @@ def format_report(report, max_paths=20):
         lines.append("- none")
 
     lines.extend(["Results from the target version:"])
-    lines.extend(format_impact_sections(report))
+    lines.extend(format_impact_sections(report, changed_ids=target_changed_ids))
     paths = report["evidence_paths"]
-    if any(path["source"] == "base" for path in paths):
+    if base_changed_ids:
         lines.extend(["", "Historical results come from the base version; they may no longer exist or depend on the deleted code."])
-        lines.extend(format_impact_sections(report["historical_impact"], historical=True))
+        lines.extend(format_impact_sections(
+            report["historical_impact"], historical=True, changed_ids=base_changed_ids
+        ))
     lines.extend(["", f"Impact paths ({len(paths)})"])
     visible_paths = paths if max_paths is None else paths[:max_paths]
     if visible_paths:
@@ -86,7 +101,7 @@ def format_report(report, max_paths=20):
             label = "base, historical" if path["source"] == "base" else "target"
             lines.append(f"- [{label}] {' -> '.join(path['symbols'])}")
     else:
-        lines.append("- none")
+        lines.append("- no caller paths found" if changed else "- none")
     if len(visible_paths) < len(paths):
         remaining = len(paths) - len(visible_paths)
         lines.append(f"- {remaining} more paths (use --all-paths)")

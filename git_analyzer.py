@@ -191,6 +191,21 @@ def changed_symbols(repository, base_commit, target_commit=None):
             }
         except SyntaxError:
             continue
+
+        previous_path = renamed.get(path, path)
+        try:
+            old_source = run_git(repository, "show", f"{base_commit}:{previous_path}")
+        except subprocess.CalledProcessError:
+            old_source = ""
+        try:
+            old_symbols = {
+                symbol["qualname"]: symbol
+                for symbol in extract_symbols(old_source)
+                if symbol["kind"] in {"function", "async_function"}
+            }
+        except SyntaxError:
+            old_symbols = None
+
         matched_symbols = {}
         for symbol in current_symbols.values():
             affected_lines = [
@@ -204,20 +219,8 @@ def changed_symbols(repository, base_commit, target_commit=None):
                     "changed_lines": affected_lines,
                 }
 
-        if removed_lines:
-            try:
-                old_source = run_git(repository, "show", f"{base_commit}:{path}")
-            except subprocess.CalledProcessError:
-                old_source = ""
-
-            try:
-                old_symbols = extract_symbols(old_source)
-            except SyntaxError:
-                old_symbols = []
-
-            for symbol in old_symbols:
-                if symbol["kind"] not in {"function", "async_function"}:
-                    continue
+        if removed_lines and old_symbols is not None:
+            for symbol in old_symbols.values():
                 removed = [
                     line
                     for line in sorted(removed_lines)
@@ -248,12 +251,12 @@ def changed_symbols(repository, base_commit, target_commit=None):
                 changed_symbol["removed_lines"] = symbol["removed_lines"]
             if symbol["qualname"] not in current_symbols:
                 changed_symbol["change_type"] = "deleted"
-            elif path in renamed:
+            elif path in renamed and old_symbols is not None and symbol["qualname"] in old_symbols:
                 changed_symbol["change_type"] = "renamed"
                 changed_symbol["previous_id"] = (
                     f"{renamed[path]}::{symbol['qualname']}"
                 )
-            elif path in untracked:
+            elif old_symbols is not None and symbol["qualname"] not in old_symbols:
                 changed_symbol["change_type"] = "added"
             symbols.append(changed_symbol)
 
@@ -317,7 +320,10 @@ def analyze_change(repository, base_commit, target_commit=None):
     for symbol in changed:
         source = "base" if symbol.get("change_type") == "deleted" else "target"
         changed_ids[source].append(symbol["id"])
-        paths = find_impact_paths(symbol["id"], graphs[source])
+        paths = [
+            path for path in find_impact_paths(symbol["id"], graphs[source])
+            if len(path) > 1
+        ]
         symbol["impact_paths"] = [
             {"source": source, "symbols": path} for path in paths
         ]

@@ -13,7 +13,7 @@ function isTestIdentifier(identifier) {
   return parts.includes('tests') || file.startsWith('test_') || file.endsWith('_test.py')
 }
 
-function Section({ title, items, renderItem }) {
+function Section({ title, items, renderItem, emptyText = 'None found' }) {
   return (
     <section className="result-section">
       <div className="section-heading">
@@ -21,7 +21,7 @@ function Section({ title, items, renderItem }) {
         <span className="count">{items.length}</span>
       </div>
       {items.length === 0 ? (
-        <p className="empty">None found</p>
+        <p className="empty">{emptyText}</p>
       ) : (
         <ul className="result-list">
           {items.map((item, index) => (
@@ -33,7 +33,8 @@ function Section({ title, items, renderItem }) {
   )
 }
 
-function ImpactSummary({ report, historical = false }) {
+function ImpactSummary({ report, historical = false, changedIds }) {
+  const relatedTests = report.related_tests.filter((test) => !changedIds.has(test))
   return (
     <div className="result-grid">
       <Section
@@ -43,17 +44,29 @@ function ImpactSummary({ report, historical = false }) {
           <>
             <span className="method">{route.method}</span> <code>{route.path}</code>
             <span className="detail">{route.symbol_id}</span>
+            <span className="detail">
+              {changedIds.has(route.symbol_id) ? 'Changed directly' : 'Reached via calls'}
+            </span>
           </>
         )}
       />
       <Section
         title={historical ? 'Historical related tests' : 'Related tests'}
-        items={report.related_tests}
-        renderItem={(test) => <code>{test}</code>}
+        items={relatedTests}
+        emptyText={report.related_tests.length > 0 ? 'Changed tests are listed above' : 'None found'}
+        renderItem={(test) => (
+          <>
+            <code>{test}</code>
+            <span className="detail">Reached via calls</span>
+          </>
+        )}
       />
       <Section
         title={historical ? 'Historical callers' : 'Affected code'}
-        items={report.affected_symbols.filter((symbol) => !isTestIdentifier(symbol))}
+        items={report.affected_symbols.filter(
+          (symbol) => !changedIds.has(symbol) && !isTestIdentifier(symbol),
+        )}
+        emptyText="No additional code callers found"
         renderItem={(symbol) => <code>{symbol}</code>}
       />
     </div>
@@ -61,6 +74,12 @@ function ImpactSummary({ report, historical = false }) {
 }
 
 export function Report({ report }) {
+  const targetChangedIds = new Set(report.changed_symbols
+    .filter((symbol) => symbol.change_type !== 'deleted')
+    .map((symbol) => symbol.id))
+  const baseChangedIds = new Set(report.changed_symbols
+    .filter((symbol) => symbol.change_type === 'deleted')
+    .map((symbol) => symbol.id))
   return (
     <div className="report">
       <div className="report-heading">
@@ -82,6 +101,7 @@ export function Report({ report }) {
           renderItem={(symbol) => (
             <>
               <code>{symbol.id}</code>
+              {isTestIdentifier(symbol.id) && <span className="detail">Test code</span>}
               {symbol.change_type && <span className="detail">{symbol.change_type}</span>}
               {symbol.changed_lines?.length > 0 && (
                 <span className="detail">Lines {symbol.changed_lines.join(', ')}</span>
@@ -96,19 +116,20 @@ export function Report({ report }) {
         />
       </div>
       <p>Results from the target version:</p>
-      <ImpactSummary report={report} />
-      {report.evidence_paths.some((path) => path.source === 'base') && (
+      <ImpactSummary report={report} changedIds={targetChangedIds} />
+      {baseChangedIds.size > 0 && (
         <>
           <p className="caution">
             Historical results come from the base version. These functions, routes,
             and tests may no longer exist or depend on the deleted code.
           </p>
-          <ImpactSummary report={report.historical_impact} historical />
+          <ImpactSummary report={report.historical_impact} historical changedIds={baseChangedIds} />
         </>
       )}
       <Section
         title="Impact paths"
         items={report.evidence_paths}
+        emptyText={report.changed_symbols.length > 0 ? 'No caller paths found' : 'No changed functions found'}
         renderItem={(path) => (
           <div className="path">
             <span className="detail">

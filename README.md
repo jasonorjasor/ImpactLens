@@ -46,6 +46,9 @@ python cli.py PATH_TO_REPOSITORY BASE_COMMIT TARGET_COMMIT --json
 ```
 
 Human-readable output shows up to 20 impact paths by default. Use `--all-paths` to show the full list.
+New functions are labeled `added`, including when they are added to an existing file.
+An impact path connects changed code to a caller. A changed function with no callers still appears under changed symbols, but has no impact path.
+Directly changed routes and tests are distinguished from code reached through calls.
 
 Deleted functions are matched against the base version, including when a whole file is removed.
 Their former callers, routes, and tests appear as historical results. Those dependencies may no longer exist in the target version.

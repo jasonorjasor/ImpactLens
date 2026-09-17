@@ -147,3 +147,37 @@ def test_format_report_shows_unanalyzed_files():
     assert "Files not analyzed (1)" in output
     assert "[target] broken.py: invalid syntax" in output
     assert "Results may be incomplete." in output
+
+
+def test_format_report_explains_direct_changes_without_repeating_tests():
+    report = sample_report()
+    report["changed_symbols"].extend([
+        {"id": "routes.py::login_route", "changed_lines": [4]},
+        {"id": "tests/test_login.py::test_login_route", "changed_lines": [3]},
+    ])
+
+    output = cli.format_report(report)
+
+    assert "POST /api/login (routes.py::login_route; changed directly)" in output
+    assert "Related tests (0)" in output
+    assert output.count("tests/test_login.py::test_login_route") == 1
+
+
+def test_format_report_keeps_historical_route_without_callers():
+    report = sample_report()
+    report["changed_symbols"] = [{
+        "id": "routes.py::login_route", "changed_lines": [], "change_type": "deleted",
+    }]
+    report["evidence_paths"] = []
+    report["historical_impact"] = {
+        "affected_symbols": [],
+        "affected_routes": report["affected_routes"],
+        "related_tests": [],
+    }
+    report["affected_routes"] = []
+
+    output = cli.format_report(report)
+
+    assert "Historical routes (1)" in output
+    assert "POST /api/login (routes.py::login_route; changed directly)" in output
+    assert "- no caller paths found" in output

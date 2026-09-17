@@ -228,3 +228,40 @@ def test_reports_parse_errors_from_both_versions(deletion_repository):
         ("target", "new_broken.py"),
     }
     assert all(item["error"] for item in report["analysis_errors"])
+
+
+def test_changed_function_without_callers_has_no_impact_path(deletion_repository):
+    repository, base = deletion_repository
+    (repository / "auth.py").write_text(
+        "def verify_user():\n    return True\n\ndef keep():\n    return 2\n",
+        encoding="utf-8",
+    )
+
+    report = analyze_change(repository, base)
+
+    assert [symbol["id"] for symbol in report["changed_symbols"]] == ["auth.py::keep"]
+    assert report["changed_symbols"][0]["impact_paths"] == []
+    assert report["evidence_paths"] == []
+    assert report["affected_symbols"] == []
+
+
+def test_deleted_route_without_callers_is_still_historical(deletion_repository):
+    repository, _ = deletion_repository
+    route = repository / "isolated.py"
+    route.write_text(
+        "@router.get('/isolated')\ndef isolated():\n    return True\n",
+        encoding="utf-8",
+    )
+    run_git(repository, "add", "isolated.py")
+    run_git(repository, "commit", "-m", "add isolated route")
+    base = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+    route.unlink()
+
+    report = analyze_change(repository, base)
+
+    assert report["changed_symbols"][0]["id"] == "isolated.py::isolated"
+    assert report["changed_symbols"][0]["impact_paths"] == []
+    assert report["evidence_paths"] == []
+    assert report["historical_impact"]["affected_routes"] == [{
+        "symbol_id": "isolated.py::isolated", "method": "GET", "path": "/isolated",
+    }]

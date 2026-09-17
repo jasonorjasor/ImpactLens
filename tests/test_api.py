@@ -100,7 +100,11 @@ def test_http_response_contains_real_analysis_and_parse_errors(monkeypatch, tmp_
     (repository / "auth.py").write_text(
         "def verify_user():\n    return True\n", encoding="utf-8"
     )
-    git("add", "auth.py")
+    (repository / "services.py").write_text(
+        "from auth import verify_user\n\ndef login():\n    return verify_user()\n",
+        encoding="utf-8",
+    )
+    git("add", "auth.py", "services.py")
     git("commit", "-m", "base")
     base = git("rev-parse", "HEAD")
     (repository / "auth.py").write_text(

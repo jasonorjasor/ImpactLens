@@ -157,3 +157,72 @@ def test_detects_untracked_deleted_and_renamed_working_tree_files(tmp_path):
     )
     assert symbols_by_id["new.py::new_function"]["change_type"] == "added"
     assert symbols_by_id["deleted.py::removed_function"]["change_type"] == "deleted"
+
+
+def test_marks_new_functions_added_in_commit_and_working_tree(tmp_path):
+    repository = tmp_path / "repo"
+    repository.mkdir()
+    run_git(repository, "init")
+    run_git(repository, "config", "user.email", "impactlens@example.com")
+    run_git(repository, "config", "user.name", "ImpactLens Tests")
+    (repository / "core.py").write_text(
+        "def existing():\n    return True\n", encoding="utf-8"
+    )
+    run_git(repository, "add", ".")
+    run_git(repository, "commit", "-m", "base")
+    base = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+
+    (repository / "core.py").write_text(
+        "def existing():\n    return False\n\ndef added_here():\n    return 1\n",
+        encoding="utf-8",
+    )
+    (repository / "new.py").write_text(
+        "def added_file():\n    return 2\n", encoding="utf-8"
+    )
+    working = {symbol["id"]: symbol for symbol in changed_symbols(repository, base)}
+    assert working["core.py::existing"].get("change_type") is None
+    assert working["core.py::added_here"]["change_type"] == "added"
+    assert working["new.py::added_file"]["change_type"] == "added"
+
+    run_git(repository, "add", ".")
+    run_git(repository, "commit", "-m", "add functions")
+    target = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+    committed = {symbol["id"]: symbol for symbol in changed_symbols(repository, base, target)}
+    assert {name: symbol.get("change_type") for name, symbol in committed.items()} == {
+        "core.py::existing": None,
+        "core.py::added_here": "added",
+        "new.py::added_file": "added",
+    }
+
+
+def test_renamed_file_preserves_old_function_and_marks_new_one_added(tmp_path):
+    repository = tmp_path / "repo"
+    repository.mkdir()
+    run_git(repository, "init")
+    run_git(repository, "config", "user.email", "impactlens@example.com")
+    run_git(repository, "config", "user.name", "ImpactLens Tests")
+    old_source = (
+        "def existing():\n"
+        + "".join(f"    value_{index} = {index}\n" for index in range(12))
+        + "    return value_11\n"
+    )
+    (repository / "old.py").write_text(old_source, encoding="utf-8")
+    run_git(repository, "add", ".")
+    run_git(repository, "commit", "-m", "base")
+    base = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+
+    (repository / "old.py").rename(repository / "renamed.py")
+    (repository / "renamed.py").write_text(
+        old_source + "\ndef fresh():\n    return 2\n", encoding="utf-8"
+    )
+    working = {symbol["id"]: symbol for symbol in changed_symbols(repository, base)}
+    assert working["renamed.py::existing"]["change_type"] == "renamed"
+    assert working["renamed.py::fresh"]["change_type"] == "added"
+    assert "previous_id" not in working["renamed.py::fresh"]
+
+    run_git(repository, "add", "-A")
+    run_git(repository, "commit", "-m", "rename and add")
+    target = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+    committed = {symbol["id"]: symbol for symbol in changed_symbols(repository, base, target)}
+    assert committed["renamed.py::existing"]["change_type"] == "renamed"
+    assert committed["renamed.py::fresh"]["change_type"] == "added"
