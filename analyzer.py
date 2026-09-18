@@ -1,6 +1,8 @@
 """Reusable static-analysis functions for the ImpactLens lessons."""
 
 import ast
+import io
+import tokenize
 from pathlib import Path
 
 
@@ -42,6 +44,13 @@ def extract_symbols(source):
     visitor = SymbolVisitor()
     visitor.visit(tree)
     return visitor.symbols
+
+
+def decode_python_source(source):
+    if isinstance(source, str):
+        return source
+    encoding, _ = tokenize.detect_encoding(io.BytesIO(source).readline)
+    return source.decode(encoding)
 
 
 def extract_functions(source):
@@ -351,9 +360,8 @@ def analyze_sources(source_by_path):
     errors = []
 
     for relative_path in sorted(source_by_path):
-        source = source_by_path[relative_path]
-
         try:
+            source = decode_python_source(source_by_path[relative_path])
             symbols = extract_symbols(source)
             functions = [
                 symbol
@@ -420,7 +428,7 @@ def analyze_repository(root):
     for path in find_python_files(root):
         relative_path = path.relative_to(root).as_posix()
         try:
-            sources[relative_path] = path.read_text(encoding="utf-8")
+            sources[relative_path] = path.read_bytes()
         except (OSError, UnicodeDecodeError) as error:
             errors.append({"path": relative_path, "error": str(error)})
 

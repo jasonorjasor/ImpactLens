@@ -9,6 +9,7 @@ from analyzer import (
     analyze_sources,
     analyze_repository,
     build_reverse_graph,
+    decode_python_source,
     extract_symbols,
     find_impact_paths,
 )
@@ -21,18 +22,19 @@ class AnalysisTimeoutError(RuntimeError):
     pass
 
 
-def run_git(repository, *arguments):
+def run_git(repository, *arguments, binary=False):
     try:
         result = subprocess.run(
             ["git", "-C", str(repository), *arguments],
             check=True,
             capture_output=True,
-            text=True,
             timeout=GIT_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired as error:
         raise AnalysisTimeoutError("Analysis Git command timed out") from error
-    return result.stdout
+    if binary:
+        return result.stdout
+    return result.stdout.decode("utf-8", errors="surrogateescape")
 
 
 def untracked_python_files(repository):
@@ -70,13 +72,14 @@ def detect_untracked_renames(repository, base_commit, deleted, untracked):
     candidates = []
     for new_path in sorted(untracked):
         try:
-            new_source = (Path(repository) / new_path).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+            new_source = (Path(repository) / new_path).read_bytes().replace(b"\r\n", b"\n")
+        except OSError:
             continue
 
         for old_path in sorted(deleted):
             try:
-                old_source = run_git(repository, "show", f"{base_commit}:{old_path}")
+                old_source = run_git(repository, "show", f"{base_commit}:{old_path}", binary=True)
+                old_source = old_source.replace(b"\r\n", b"\n")
             except subprocess.CalledProcessError:
                 continue
 
@@ -145,8 +148,8 @@ def changed_python_line_ranges(repository, base_commit, target_commit=None):
     if target_commit is None:
         for path in untracked_python_files(repository):
             try:
-                source = (Path(repository) / path).read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
+                source = (Path(repository) / path).read_bytes()
+            except OSError:
                 continue
             line_count = len(source.splitlines())
             if line_count:
@@ -186,35 +189,35 @@ def changed_symbols(repository, base_commit, target_commit=None):
         removed_lines = ranges["removed_lines"]
         try:
             if path in deleted:
-                source = ""
+                source = b""
             elif target_commit is None:
-                source = (repository / path).read_text(encoding="utf-8")
+                source = (repository / path).read_bytes()
             else:
-                source = run_git(repository, "show", f"{target_commit}:{path}")
-        except (OSError, UnicodeDecodeError, subprocess.CalledProcessError):
+                source = run_git(repository, "show", f"{target_commit}:{path}", binary=True)
+        except (OSError, subprocess.CalledProcessError):
             continue
 
         try:
             current_symbols = {
                 symbol["qualname"]: symbol
-                for symbol in extract_symbols(source)
+                for symbol in extract_symbols(decode_python_source(source))
                 if symbol["kind"] in {"function", "async_function"}
             }
-        except SyntaxError:
+        except (SyntaxError, UnicodeDecodeError):
             continue
 
         previous_path = renamed.get(path, path)
         try:
-            old_source = run_git(repository, "show", f"{base_commit}:{previous_path}")
+            old_source = run_git(repository, "show", f"{base_commit}:{previous_path}", binary=True)
         except subprocess.CalledProcessError:
-            old_source = ""
+            old_source = b""
         try:
             old_symbols = {
                 symbol["qualname"]: symbol
-                for symbol in extract_symbols(old_source)
+                for symbol in extract_symbols(decode_python_source(old_source))
                 if symbol["kind"] in {"function", "async_function"}
             }
-        except SyntaxError:
+        except (SyntaxError, UnicodeDecodeError):
             old_symbols = None
 
         matched_symbols = {}
@@ -280,7 +283,7 @@ def analyze_commit(repository, commit=None):
 
     paths = run_git(repository, "ls-tree", "-r", "--name-only", commit, "--")
     sources = {
-        path: run_git(repository, "show", f"{commit}:{path}")
+        path: run_git(repository, "show", f"{commit}:{path}", binary=True)
         for path in paths.splitlines()
         if path.endswith(".py")
     }

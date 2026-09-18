@@ -3,6 +3,16 @@
 from analyzer import analyze_repository
 
 
+def test_reports_invalid_source_encoding_without_guessing(tmp_path):
+    (tmp_path / "invalid.py").write_bytes(b"def broken():\n    return '\xff'\n")
+
+    report = analyze_repository(tmp_path)
+
+    assert report["files"] == []
+    assert len(report["errors"]) == 1
+    assert report["errors"][0]["path"] == "invalid.py"
+
+
 def test_analyzes_nested_python_files_and_keeps_paths(tmp_path):
     source_root = tmp_path / "repo"
     package = source_root / "package"

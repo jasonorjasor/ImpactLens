@@ -16,6 +16,34 @@ def run_git(repository, *arguments):
     )
 
 
+def test_uses_declared_python_encoding_for_commits_and_working_tree(tmp_path):
+    repository = tmp_path / "repo"
+    repository.mkdir()
+    run_git(repository, "init")
+    run_git(repository, "config", "user.email", "impactlens@example.com")
+    run_git(repository, "config", "user.name", "ImpactLens Tests")
+
+    source = repository / "legacy.py"
+    source.write_bytes(b"# coding: latin-1\ndef caf\xe9():\n    return 1\n")
+    run_git(repository, "add", "legacy.py")
+    run_git(repository, "commit", "-m", "base")
+    base = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+
+    source.write_bytes(b"# coding: latin-1\ndef caf\xe9():\n    return 2\n")
+    run_git(repository, "add", "legacy.py")
+    run_git(repository, "commit", "-m", "change")
+    target = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+
+    committed = analyze_change(repository, base, target)
+    assert [symbol["id"] for symbol in committed["changed_symbols"]] == ["legacy.py::caf\u00e9"]
+    assert committed["analysis_errors"] == []
+
+    source.write_bytes(b"# coding: latin-1\ndef caf\xe9():\n    return 3\n")
+    working = analyze_change(repository, target)
+    assert [symbol["id"] for symbol in working["changed_symbols"]] == ["legacy.py::caf\u00e9"]
+    assert working["analysis_errors"] == []
+
+
 def test_builds_impact_report_from_two_commits(tmp_path):
     repository = tmp_path / "repo"
     repository.mkdir()
