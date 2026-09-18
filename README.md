@@ -2,6 +2,8 @@
 
 ImpactLens analyzes Python code changes and shows what may be affected.
 
+For a repeatable walkthrough, see [DEMO.md](DEMO.md).
+
 It currently:
 
 - finds Python functions and classes
