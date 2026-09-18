@@ -26,10 +26,13 @@ ImpactLens helps a developer review a Python code change by showing changed func
 13. **Keep this file in the repository.** It stays beside the code, can be reviewed in GitHub, and can be updated in the same commit as a change. We will record the choice, reason, meaningful alternative, and limitation when we implement something new.
 14. **Add a focused frontend report test with Node's built-in test runner.** The Python suite checks analysis and API behavior but cannot catch a misleading browser label or count. A server-rendered component test checks those report rules without adding a test framework dependency. It does not replace a future browser interaction test.
 15. **Translate expected loading failures into useful messages.** A real browser run against this public repository succeeded, but an invalid commit exposed raw Git text and an unavailable API exposed a JSON parsing error. The loader now keeps the original Git error as a cause but returns a short explanation for clone/fetch failures. The frontend handles connection and non-JSON responses separately. This loses some low-level detail in the UI; preserving it in the exception chain keeps debugging possible without showing temporary paths to users.
+16. **Check repository size after each download stage.** We used to check only after cloning and both commit fetches. Checking after the initial clone and each fetch stops work sooner when the repository has grown past 100 MB. Repeated scans add a little overhead; they are not a hard cap during a clone or on-demand blob fetch.
+17. **Bound Git command time and concurrent API work.** Git commands in the analyzer now have a 60-second timeout, alongside the loader's existing 120-second per-command timeout. The API admits two analyses at a time per process and returns 503 when both slots are in use; timeouts return 504. This is a conservative starting limit, not a measured capacity figure. A fixed per-command timeout and per-process semaphore do not enforce a total request deadline or a limit shared across multiple server processes.
 
 ## Next checkpoints
 
-1. Before public deployment, review limits for clone size, request time, and concurrent analysis. Those are operational safeguards, not a reason to expand language support yet.
-2. If browser interactions grow, add an automated browser test. Component and request tests protect current behavior, but they do not automate every click-through scenario.
+1. Before public deployment, measure realistic repository sizes and request times, then decide whether we need a hard download cap, a total request deadline, or cross-process admission control.
+2. Prepare a repeatable demo input and practice explaining the analysis and its limitations.
+3. If browser interactions grow, add an automated browser test. Component and request tests protect current behavior, but they do not automate every click-through scenario.
 
 We should revisit a decision when a real example or test shows it is not serving the project. The point of this file is to explain choices, not defend them forever.

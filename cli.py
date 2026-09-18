@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-from git_analyzer import analyze_change, analyze_working_tree
+from git_analyzer import AnalysisTimeoutError, analyze_change, analyze_working_tree
 from repository_loader import RepositoryLoadError, is_github_url, open_repository
 
 
@@ -180,7 +180,7 @@ def main(arguments=None):
                         args.base_commit,
                         args.target_commit,
                     )
-    except RepositoryLoadError as error:
+    except (RepositoryLoadError, AnalysisTimeoutError) as error:
         parser.error(str(error))
 
     if args.json:

@@ -2,6 +2,9 @@
 
 import subprocess
 
+import pytest
+
+import git_analyzer
 from git_analyzer import (
     analyze_working_tree,
     changed_python_lines,
@@ -16,6 +19,17 @@ def run_git(repository, *arguments):
         capture_output=True,
         text=True,
     )
+
+
+def test_analysis_git_command_has_a_timeout(monkeypatch, tmp_path):
+    def timeout(*args, **kwargs):
+        assert kwargs["timeout"] == git_analyzer.GIT_TIMEOUT_SECONDS
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+
+    monkeypatch.setattr(git_analyzer.subprocess, "run", timeout)
+
+    with pytest.raises(git_analyzer.AnalysisTimeoutError, match="timed out"):
+        git_analyzer.run_git(tmp_path, "status")
 
 
 def test_maps_changed_lines_to_target_functions(tmp_path):

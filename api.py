@@ -1,13 +1,21 @@
+import threading
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from git_analyzer import analyze_change
-from repository_loader import RepositoryLoadError, is_github_url, open_repository
+from git_analyzer import AnalysisTimeoutError, analyze_change
+from repository_loader import (
+    RepositoryLoadError,
+    RepositoryTimeoutError,
+    is_github_url,
+    open_repository,
+)
 
 
 app = FastAPI(title="ImpactLens API")
+MAX_CONCURRENT_ANALYSES = 2
+analysis_slots = threading.BoundedSemaphore(MAX_CONCURRENT_ANALYSES)
 
 
 class APIModel(BaseModel):
@@ -78,6 +86,9 @@ def analyze_repository_change(request: AnalyzeRequest):
             detail="repository must be a public HTTPS GitHub URL",
         )
 
+    if not analysis_slots.acquire(blocking=False):
+        raise HTTPException(status_code=503, detail="Analysis is busy. Try again shortly.")
+
     try:
         with open_repository(
             request.repository,
@@ -89,5 +100,9 @@ def analyze_repository_change(request: AnalyzeRequest):
                 request.base_commit,
                 request.target_commit,
             )
+    except (RepositoryTimeoutError, AnalysisTimeoutError) as error:
+        raise HTTPException(status_code=504, detail=str(error)) from error
     except RepositoryLoadError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+    finally:
+        analysis_slots.release()

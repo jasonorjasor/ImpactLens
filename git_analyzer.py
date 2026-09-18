@@ -14,13 +14,24 @@ from analyzer import (
 )
 
 
+GIT_TIMEOUT_SECONDS = 60
+
+
+class AnalysisTimeoutError(RuntimeError):
+    pass
+
+
 def run_git(repository, *arguments):
-    result = subprocess.run(
-        ["git", "-C", str(repository), *arguments],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repository), *arguments],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise AnalysisTimeoutError("Analysis Git command timed out") from error
     return result.stdout
 
 

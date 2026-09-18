@@ -15,6 +15,10 @@ class RepositoryLoadError(RuntimeError):
     pass
 
 
+class RepositoryTimeoutError(RepositoryLoadError):
+    pass
+
+
 def normalize_github_url(value):
     parsed = urlparse(str(value))
     if parsed.scheme.lower() != "https" or parsed.netloc.lower() != "github.com":
@@ -54,7 +58,7 @@ def _execute_command(arguments):
     except FileNotFoundError as error:
         raise RepositoryLoadError("Git is required to load a repository") from error
     except subprocess.TimeoutExpired as error:
-        raise RepositoryLoadError("Git operation timed out") from error
+        raise RepositoryTimeoutError("Git operation timed out") from error
     except subprocess.CalledProcessError as error:
         message = error.stderr.strip() or "Git operation failed"
         raise RepositoryLoadError(message) from error
@@ -128,6 +132,14 @@ def repository_size_bytes(repository):
     return total
 
 
+def enforce_repository_size(repository, max_bytes):
+    size = repository_size_bytes(repository)
+    if size > max_bytes:
+        raise RepositoryLoadError(
+            f"Repository is too large: {size} bytes exceeds the {max_bytes}-byte limit"
+        )
+
+
 @contextmanager
 def open_repository(location, base_commit=None, target_commit=None, max_bytes=MAX_REPOSITORY_BYTES):
     location = str(location)
@@ -161,6 +173,7 @@ def open_repository(location, base_commit=None, target_commit=None, max_bytes=MA
                     "Could not access this public GitHub repository. Check the URL and your connection."
                 ) from error
             raise
+        enforce_repository_size(repository, max_bytes)
         _run_command(
             [
                 "git",
@@ -172,12 +185,8 @@ def open_repository(location, base_commit=None, target_commit=None, max_bytes=MA
             ]
         )
         _ensure_commit(repository, base_commit)
+        enforce_repository_size(repository, max_bytes)
         _ensure_commit(repository, target_commit)
-
-        size = repository_size_bytes(repository)
-        if size > max_bytes:
-            raise RepositoryLoadError(
-                f"Repository is too large: {size} bytes exceeds the {max_bytes}-byte limit"
-            )
+        enforce_repository_size(repository, max_bytes)
 
         yield repository

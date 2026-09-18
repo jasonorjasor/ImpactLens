@@ -71,6 +71,8 @@ python -m uvicorn api:app --reload
 
 The API provides `GET /health` and `POST /analyze`. FastAPI's interactive documentation is available at `http://127.0.0.1:8000/docs`.
 `POST /analyze` validates its response against the report model before returning JSON. Invalid requests return 422; repository loading errors return 400.
+The API runs at most two analyses at once per process; extra requests return 503. Git loading commands time out after 120 seconds and Git commands during analysis after 60 seconds; timeouts return 504.
+The 100 MB repository limit is checked after cloning and after each commit fetch. It is not a hard download cap or a timeout for the whole request.
 
 ## Run the frontend
 

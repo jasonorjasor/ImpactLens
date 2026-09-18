@@ -1,11 +1,15 @@
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
 import subprocess
+import threading
 
 import pytest
 from fastapi.exceptions import ResponseValidationError
 from fastapi.testclient import TestClient
 
 import api
+from git_analyzer import AnalysisTimeoutError
+from repository_loader import RepositoryTimeoutError
 
 
 client = TestClient(api.app)
@@ -154,3 +158,73 @@ def test_analyze_rejects_a_malformed_analyzer_result(monkeypatch, tmp_path):
 
     with pytest.raises(ResponseValidationError):
         client.post("/analyze", json=request)
+
+
+def empty_report():
+    return {
+        "base_commit": "old", "target_commit": "new", "changed_symbols": [],
+        "affected_symbols": [], "affected_routes": [], "related_tests": [],
+        "historical_impact": {
+            "affected_symbols": [], "affected_routes": [], "related_tests": [],
+        },
+        "evidence_paths": [], "analysis_errors": [],
+    }
+
+
+def test_analyze_rejects_excess_concurrent_requests(monkeypatch, tmp_path):
+    entered = threading.Event()
+    release = threading.Event()
+    monkeypatch.setattr(api, "analysis_slots", threading.BoundedSemaphore(1))
+
+    @contextmanager
+    def slow_loader(*args):
+        entered.set()
+        assert release.wait(5)
+        yield tmp_path
+
+    monkeypatch.setattr(api, "open_repository", slow_loader)
+    monkeypatch.setattr(api, "analyze_change", lambda *args: empty_report())
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(client.post, "/analyze", json=request)
+        assert entered.wait(5)
+        try:
+            busy = client.post("/analyze", json=request)
+            assert busy.status_code == 503
+            assert "busy" in busy.json()["detail"].lower()
+        finally:
+            release.set()
+        assert first.result(timeout=5).status_code == 200
+
+
+def test_analysis_timeout_returns_a_clear_response_and_releases_slot(monkeypatch, tmp_path):
+    monkeypatch.setattr(api, "analysis_slots", threading.BoundedSemaphore(1))
+
+    @contextmanager
+    def fake_loader(*args):
+        yield tmp_path
+
+    monkeypatch.setattr(api, "open_repository", fake_loader)
+    def timed_out(*args):
+        raise AnalysisTimeoutError("Analysis Git command timed out")
+
+    monkeypatch.setattr(api, "analyze_change", timed_out)
+    response = client.post("/analyze", json=request)
+    assert response.status_code == 504
+    assert "timed out" in response.json()["detail"].lower()
+
+    monkeypatch.setattr(api, "analyze_change", lambda *args: empty_report())
+    assert client.post("/analyze", json=request).status_code == 200
+
+
+def test_repository_timeout_returns_gateway_timeout(monkeypatch):
+    @contextmanager
+    def slow_loader(*args):
+        raise RepositoryTimeoutError("Git operation timed out")
+        yield
+
+    monkeypatch.setattr(api, "open_repository", slow_loader)
+    response = client.post("/analyze", json=request)
+
+    assert response.status_code == 504
+    assert response.json() == {"detail": "Git operation timed out"}

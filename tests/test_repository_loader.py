@@ -5,6 +5,7 @@ import pytest
 import repository_loader
 from repository_loader import (
     RepositoryLoadError,
+    RepositoryTimeoutError,
     is_github_url,
     normalize_github_url,
     open_repository,
@@ -93,9 +94,49 @@ def test_fetch_timeout_keeps_its_specific_message(monkeypatch, tmp_path):
     monkeypatch.setattr(repository_loader, "_commit_exists", lambda *_: False)
 
     def timeout(_):
-        raise RepositoryLoadError("Git operation timed out") from subprocess.TimeoutExpired("git", 120)
+        raise RepositoryTimeoutError("Git operation timed out") from subprocess.TimeoutExpired("git", 120)
 
     monkeypatch.setattr(repository_loader, "_run_command", timeout)
 
     with pytest.raises(RepositoryLoadError, match="Git operation timed out"):
         repository_loader._ensure_commit(tmp_path, "missing")
+
+
+def test_rejects_oversized_clone_before_fetch(monkeypatch):
+    commands = []
+    monkeypatch.setattr(repository_loader, "_run_command", lambda arguments: commands.append(arguments))
+    monkeypatch.setattr(
+        repository_loader,
+        "repository_size_bytes",
+        lambda _: repository_loader.MAX_REPOSITORY_BYTES + 1,
+    )
+
+    with pytest.raises(RepositoryLoadError, match="Repository is too large"):
+        with open_repository("https://github.com/owner/repository", "base", "target"):
+            pass
+
+    assert not any("fetch" in command for command in commands)
+
+
+def test_rejects_repository_after_first_commit_fetch(monkeypatch):
+    commands = []
+    fetched = set()
+
+    def run(arguments):
+        commands.append(arguments)
+        if "fetch" in arguments:
+            fetched.add(arguments[-1])
+
+    monkeypatch.setattr(repository_loader, "_run_command", run)
+    monkeypatch.setattr(repository_loader, "_commit_exists", lambda _, commit: commit in fetched)
+    monkeypatch.setattr(
+        repository_loader,
+        "repository_size_bytes",
+        lambda _: repository_loader.MAX_REPOSITORY_BYTES + 1 if fetched else 0,
+    )
+
+    with pytest.raises(RepositoryLoadError, match="Repository is too large"):
+        with open_repository("https://github.com/owner/repository", "base", "target"):
+            pass
+
+    assert [command[-1] for command in commands if "fetch" in command] == ["base"]
