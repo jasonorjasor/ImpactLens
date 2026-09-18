@@ -20,7 +20,6 @@ python -m pytest -q
 ```
 
 For frontend report tests, run `npm test` from `frontend/`.
-Project choices and their tradeoffs are recorded in [DECISIONS.md](DECISIONS.md).
 
 ## Run an analysis
 
