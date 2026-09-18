@@ -22,12 +22,13 @@ class AnalysisTimeoutError(RuntimeError):
     pass
 
 
-def run_git(repository, *arguments, binary=False):
+def run_git(repository, *arguments, binary=False, input_data=None):
     try:
         result = subprocess.run(
             ["git", "-C", str(repository), *arguments],
             check=True,
             capture_output=True,
+            input=input_data,
             timeout=GIT_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired as error:
@@ -281,12 +282,45 @@ def analyze_commit(repository, commit=None):
     if commit is None:
         return analyze_repository(repository)
 
-    paths = run_git(repository, "ls-tree", "-r", "--name-only", commit, "--")
-    sources = {
-        path: run_git(repository, "show", f"{commit}:{path}", binary=True)
-        for path in paths.splitlines()
-        if path.endswith(".py")
-    }
+    listing = run_git(repository, "ls-tree", "-r", "-z", commit, "--", binary=True)
+    entries = []
+    for record in listing.split(b"\0"):
+        if not record:
+            continue
+        metadata, raw_path = record.split(b"\t", 1)
+        _, kind, object_id = metadata.split(b" ")
+        if kind == b"blob" and raw_path.endswith(b".py"):
+            entries.append((raw_path.decode("utf-8", errors="surrogateescape"), object_id))
+
+    if not entries:
+        return analyze_sources({})
+
+    output = run_git(
+        repository,
+        "cat-file",
+        "--batch",
+        binary=True,
+        input_data=b"\n".join(object_id for _, object_id in entries) + b"\n",
+    )
+    sources = {}
+    offset = 0
+    for path, object_id in entries:
+        line_end = output.find(b"\n", offset)
+        if line_end < 0:
+            raise ValueError("Git returned an incomplete blob header")
+        header = output[offset:line_end].split(b" ")
+        if len(header) != 3 or header[:2] != [object_id, b"blob"]:
+            raise ValueError("Git returned an unexpected blob header")
+        size = int(header[2])
+        start = line_end + 1
+        end = start + size
+        if output[end:end + 1] != b"\n":
+            raise ValueError("Git returned an incomplete blob")
+        sources[path] = output[start:end]
+        offset = end + 1
+
+    if offset != len(output):
+        raise ValueError("Git returned extra blob data")
     return analyze_sources(sources)
 
 

@@ -1,4 +1,6 @@
 from contextlib import contextmanager
+import hashlib
+import json
 
 from benchmarks import measure as benchmark
 
@@ -34,4 +36,15 @@ def test_measure_reports_load_analysis_and_repository_size(monkeypatch, tmp_path
         "changed_symbols": 1,
         "evidence_paths": 0,
         "analysis_errors": 0,
+        "report_sha256": hashlib.sha256(
+            json.dumps(
+                {
+                    "changed_symbols": [{"id": "core.py::work"}],
+                    "evidence_paths": [],
+                    "analysis_errors": [],
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest(),
     }

@@ -32,6 +32,32 @@ def test_analysis_git_command_has_a_timeout(monkeypatch, tmp_path):
         git_analyzer.run_git(tmp_path, "status")
 
 
+def test_analyze_commit_loads_python_blobs_in_one_batch(monkeypatch, tmp_path):
+    repository = tmp_path / "repo"
+    repository.mkdir()
+    run_git(repository, "init")
+    run_git(repository, "config", "user.email", "impactlens@example.com")
+    run_git(repository, "config", "user.name", "ImpactLens Tests")
+    (repository / "first.py").write_text("def first():\n    return 1\n", encoding="utf-8")
+    (repository / "second.py").write_text("def second():\n    return 2\n", encoding="utf-8")
+    run_git(repository, "add", ".")
+    run_git(repository, "commit", "-m", "base")
+    commit = run_git(repository, "rev-parse", "HEAD").stdout.strip()
+
+    original_run_git = git_analyzer.run_git
+    commands = []
+
+    def recorded_run_git(repository, *arguments, **options):
+        commands.append(arguments[0])
+        return original_run_git(repository, *arguments, **options)
+
+    monkeypatch.setattr(git_analyzer, "run_git", recorded_run_git)
+    report = git_analyzer.analyze_commit(repository, commit)
+
+    assert [file["path"] for file in report["files"]] == ["first.py", "second.py"]
+    assert commands == ["ls-tree", "cat-file"]
+
+
 def test_maps_changed_lines_to_target_functions(tmp_path):
     repository = tmp_path / "repo"
     repository.mkdir()

@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import time
 
@@ -15,6 +16,9 @@ def measure(repository, base_commit, target_commit):
         report = analyze_change(loaded_repository, base_commit, target_commit)
         analyzed = time.perf_counter()
         analyzed_bytes = repository_size_bytes(loaded_repository)
+        report_sha256 = hashlib.sha256(
+            json.dumps(report, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
 
     return {
         "repository": repository,
@@ -28,6 +32,7 @@ def measure(repository, base_commit, target_commit):
         "changed_symbols": len(report["changed_symbols"]),
         "evidence_paths": len(report["evidence_paths"]),
         "analysis_errors": len(report["analysis_errors"]),
+        "report_sha256": report_sha256,
     }
 
 
