@@ -7,11 +7,13 @@ from git_analyzer import analyze_change
 from repository_loader import open_repository, repository_size_bytes
 
 
-def measure(repository, base_commit, target_commit):
+def measure(repository, base_commit, target_commit, analysis_barrier=None):
     started = time.perf_counter()
     with open_repository(repository, base_commit, target_commit) as loaded_repository:
         loaded = time.perf_counter()
         loaded_bytes = repository_size_bytes(loaded_repository)
+        if analysis_barrier is not None:
+            analysis_barrier.wait(timeout=180)
         analysis_started = time.perf_counter()
         report = analyze_change(loaded_repository, base_commit, target_commit)
         analyzed = time.perf_counter()
