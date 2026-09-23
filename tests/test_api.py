@@ -197,6 +197,43 @@ def test_analyze_rejects_excess_concurrent_requests(monkeypatch, tmp_path):
         assert first.result(timeout=5).status_code == 200
 
 
+def test_two_analyses_run_while_a_third_is_rejected(monkeypatch, tmp_path):
+    entered = threading.Event()
+    release = threading.Event()
+    lock = threading.Lock()
+    active = 0
+    monkeypatch.setattr(api, "analysis_slots", threading.BoundedSemaphore(2))
+
+    @contextmanager
+    def slow_loader(*args):
+        nonlocal active
+        with lock:
+            active += 1
+            if active == 2:
+                entered.set()
+        assert release.wait(5)
+        try:
+            yield tmp_path
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(api, "open_repository", slow_loader)
+    monkeypatch.setattr(api, "analyze_change", lambda *args: empty_report())
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(client.post, "/analyze", json=request)
+        second = pool.submit(client.post, "/analyze", json=request)
+        assert entered.wait(5)
+        try:
+            busy = client.post("/analyze", json=request)
+            assert busy.status_code == 503
+        finally:
+            release.set()
+        assert first.result(timeout=5).status_code == 200
+        assert second.result(timeout=5).status_code == 200
+
+
 def test_analysis_timeout_returns_a_clear_response_and_releases_slot(monkeypatch, tmp_path):
     monkeypatch.setattr(api, "analysis_slots", threading.BoundedSemaphore(1))
 

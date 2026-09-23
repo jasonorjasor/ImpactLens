@@ -36,3 +36,17 @@ One Windows/Python 3.14 run per setting on September 18, 2026 gave:
 | pytest | 58.6 MiB | 76.1 MiB | 24.870 s | 19.242 s | 2 changed, 0 paths, 0 errors | `f818ed26e66e` |
 
 Both runs in each pair matched the single-run report hash. Peak memory is the Python process's peak working set from process start; it excludes child Git processes, other server processes, and operating-system cache. These commands exercise the same loader and analyzer as the API, but they do not send HTTP requests or measure rejected third requests. Cloning and on-demand Git fetching affect wall time, so the shorter two-run pytest result is not a throughput claim. These samples do not justify raising the 100 MB repository limit or changing the two-analysis API limit. Streaming batch blob output remains an option if larger or repeated workloads show memory pressure.
+
+## API and Git process check
+
+Install the optional sampler with `python -m pip install -e ".[benchmark]"`. Run `python -m benchmarks.api_load REPOSITORY BASE_COMMIT TARGET_COMMIT --requests 1`, then repeat with `--requests 2` and `--requests 3` in fresh processes. Each command starts a local API server, sends requests together, samples its process and Git children, checks successful report hashes, and expects a 503 when a third request overlaps the two API slots.
+
+One Windows/Python 3.14 run per setting on September 22, 2026 gave:
+
+| Repository | Peak summed RSS, 1 / 2 / 3 requests | Wall time, 1 / 2 / 3 | HTTP results for 3 | API report hash prefix |
+| --- | --- | --- | --- | --- |
+| ImpactLens | 121.5 / 176.1 / 172.2 MiB | 8.556 / 8.861 / 8.777 s | 200, 200, 503 | `f663537c47d3` |
+| Requests | 126.3 / 189.6 / 192.7 MiB | 10.909 / 11.244 / 11.701 s | 200, 200, 503 | `67dac84aa64a` |
+| pytest | 131.0 / 192.6 / 197.2 MiB | 17.129 / 23.672 / 25.097 s | 200, 200, 503 | `64c9b4df15a2` |
+
+Every 200 response in a repository's three settings had the same complete JSON hash and zero analysis errors. The rejected requests returned the API's busy message in 0.018–0.046 seconds. The sampler checks RSS about every 20 ms while requests run. Summing RSS can count shared memory more than once, and brief Git peaks can fall between samples; the result is an observed process-tree footprint, not an exact peak or unique-memory total. GitHub download speed and machine load affect wall times. These single runs support the existing two-slot behavior for these repositories but do not establish a safe 100 MB repository limit, a total request deadline, or capacity across server processes.
