@@ -5,6 +5,8 @@ import io
 import tokenize
 from pathlib import Path
 
+from request_budget import check_deadline
+
 
 EXCLUDED_DIRS = {".git", ".venv", "venv", "__pycache__"}
 
@@ -219,6 +221,7 @@ def build_reverse_graph(calls):
     reverse_graph = {}
 
     for call in calls:
+        check_deadline()
         caller = call.get("caller_id", call.get("caller"))
         if "callee_id" in call:
             callee = call["callee_id"]
@@ -237,6 +240,7 @@ def find_affected_functions(changed_function, graph):
     visited = {changed_function}
 
     while to_visit:
+        check_deadline()
         current = to_visit.pop()
 
         for caller in graph.get(current, []):
@@ -252,6 +256,7 @@ def find_impact_paths(changed_function, graph):
     paths = []
 
     def visit(current_function, current_path):
+        check_deadline()
         callers = graph.get(current_function, [])
 
         if not callers:
@@ -301,12 +306,14 @@ def resolve_import_module(imported_module, current_module):
 def _resolve_files(files):
     functions_by_file_and_qualname = {}
     for file in files:
+        check_deadline()
         for function in file["functions"]:
             key = (function["path"], function["qualname"])
             functions_by_file_and_qualname.setdefault(key, []).append(function["id"])
 
     functions_by_module_and_name = {}
     for file in files:
+        check_deadline()
         for function in file["functions"]:
             if function["name"] != function["qualname"]:
                 continue
@@ -314,6 +321,7 @@ def _resolve_files(files):
             functions_by_module_and_name.setdefault(key, []).append(function["id"])
 
     for file in files:
+        check_deadline()
         imports_by_local_name = {
             item["local_name"]: item for item in file["imports"]
         }
@@ -360,6 +368,7 @@ def analyze_sources(source_by_path):
     errors = []
 
     for relative_path in sorted(source_by_path):
+        check_deadline()
         try:
             source = decode_python_source(source_by_path[relative_path])
             symbols = extract_symbols(source)
@@ -426,6 +435,7 @@ def analyze_repository(root):
     sources = {}
     errors = []
     for path in find_python_files(root):
+        check_deadline()
         relative_path = path.relative_to(root).as_posix()
         try:
             sources[relative_path] = path.read_bytes()

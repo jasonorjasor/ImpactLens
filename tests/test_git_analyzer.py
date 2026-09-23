@@ -5,6 +5,7 @@ import subprocess
 import pytest
 
 import git_analyzer
+from request_budget import RequestDeadlineExceeded, request_deadline
 from git_analyzer import (
     analyze_working_tree,
     changed_python_lines,
@@ -30,6 +31,39 @@ def test_analysis_git_command_has_a_timeout(monkeypatch, tmp_path):
 
     with pytest.raises(git_analyzer.AnalysisTimeoutError, match="timed out"):
         git_analyzer.run_git(tmp_path, "status")
+
+
+def test_analysis_git_command_uses_remaining_request_time(monkeypatch, tmp_path):
+    seen = []
+
+    def fake_run(*args, **kwargs):
+        seen.append(kwargs["timeout"])
+        return subprocess.CompletedProcess(args[0], 0, b"", b"")
+
+    monkeypatch.setattr(git_analyzer.subprocess, "run", fake_run)
+    with request_deadline(1):
+        git_analyzer.run_git(tmp_path, "status")
+
+    assert len(seen) == 1
+    assert 0 < seen[0] <= 1
+
+
+def test_deadline_is_not_treated_as_an_unreadable_source(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        git_analyzer,
+        "changed_python_line_ranges",
+        lambda *args: {"app.py": {"added_lines": {1}, "removed_lines": set()}},
+    )
+    monkeypatch.setattr(
+        git_analyzer, "python_file_changes", lambda *args: (set(), {})
+    )
+
+    def expired(*args, **kwargs):
+        raise RequestDeadlineExceeded("request deadline")
+
+    monkeypatch.setattr(git_analyzer, "run_git", expired)
+    with pytest.raises(RequestDeadlineExceeded):
+        changed_symbols(tmp_path, "base", "target")
 
 
 def test_analyze_commit_loads_python_blobs_in_one_batch(monkeypatch, tmp_path):

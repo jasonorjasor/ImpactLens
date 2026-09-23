@@ -18,7 +18,7 @@ test = ["pytest>=8,<9", "httpx>=0.27,<1"]
 benchmark = ["psutil>=6,<8"]
 
 [tool.setuptools]
-py-modules = ["analyzer", "git_analyzer", "cli", "repository_loader", "api"]
+py-modules = ["analyzer", "git_analyzer", "cli", "repository_loader", "request_budget", "api"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

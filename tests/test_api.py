@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 import subprocess
 import threading
+import time
 
 import pytest
 from fastapi.exceptions import ResponseValidationError
@@ -267,6 +268,28 @@ def test_analysis_timeout_returns_a_clear_response_and_releases_slot(monkeypatch
     response = client.post("/analyze", json=request)
     assert response.status_code == 504
     assert "timed out" in response.json()["detail"].lower()
+
+    monkeypatch.setattr(api, "analyze_change", lambda *args: empty_report())
+    assert client.post("/analyze", json=request).status_code == 200
+
+
+def test_request_deadline_returns_504_and_releases_slot(monkeypatch, tmp_path):
+    monkeypatch.setattr(api, "MAX_REQUEST_SECONDS", 0.05)
+    monkeypatch.setattr(api, "analysis_slots", threading.BoundedSemaphore(1))
+
+    @contextmanager
+    def fake_loader(*args):
+        yield tmp_path
+
+    def slow_analyzer(*args):
+        time.sleep(0.1)
+        return empty_report()
+
+    monkeypatch.setattr(api, "open_repository", fake_loader)
+    monkeypatch.setattr(api, "analyze_change", slow_analyzer)
+    response = client.post("/analyze", json=request)
+    assert response.status_code == 504
+    assert "deadline" in response.json()["detail"].lower()
 
     monkeypatch.setattr(api, "analyze_change", lambda *args: empty_report())
     assert client.post("/analyze", json=request).status_code == 200

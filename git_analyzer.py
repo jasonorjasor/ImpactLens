@@ -13,6 +13,7 @@ from analyzer import (
     extract_symbols,
     find_impact_paths,
 )
+from request_budget import check_deadline, command_timeout
 
 
 GIT_TIMEOUT_SECONDS = 60
@@ -29,10 +30,15 @@ def run_git(repository, *arguments, binary=False, input_data=None):
             check=True,
             capture_output=True,
             input=input_data,
-            timeout=GIT_TIMEOUT_SECONDS,
+            timeout=command_timeout(GIT_TIMEOUT_SECONDS),
         )
     except subprocess.TimeoutExpired as error:
+        check_deadline()
         raise AnalysisTimeoutError("Analysis Git command timed out") from error
+    except subprocess.CalledProcessError:
+        check_deadline()
+        raise
+    check_deadline()
     if binary:
         return result.stdout
     return result.stdout.decode("utf-8", errors="surrogateescape")
@@ -118,6 +124,7 @@ def changed_python_line_ranges(repository, base_commit, target_commit=None):
     pattern = re.compile(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
     for line in diff.splitlines():
+        check_deadline()
         if line.startswith("diff --git "):
             current_path = None
             old_line = None
@@ -184,6 +191,7 @@ def changed_symbols(repository, base_commit, target_commit=None):
     renamed_sources = set(renamed.values())
 
     for path, ranges in changed_ranges.items():
+        check_deadline()
         if path in renamed_sources:
             continue
         added_lines = ranges["added_lines"]
@@ -285,6 +293,7 @@ def analyze_commit(repository, commit=None):
     listing = run_git(repository, "ls-tree", "-r", "-z", commit, "--", binary=True)
     entries = []
     for record in listing.split(b"\0"):
+        check_deadline()
         if not record:
             continue
         metadata, raw_path = record.split(b"\t", 1)
@@ -305,6 +314,7 @@ def analyze_commit(repository, commit=None):
     sources = {}
     offset = 0
     for path, object_id in entries:
+        check_deadline()
         line_end = output.find(b"\n", offset)
         if line_end < 0:
             raise ValueError("Git returned an incomplete blob header")
@@ -366,6 +376,7 @@ def analyze_change(repository, base_commit, target_commit=None):
     changed_ids = {"base": [], "target": []}
 
     for symbol in changed:
+        check_deadline()
         source = "base" if symbol.get("change_type") == "deleted" else "target"
         changed_ids[source].append(symbol["id"])
         paths = [

@@ -62,3 +62,9 @@ On September 23, 2026, the pinned [AutoGen](https://github.com/microsoft/autogen
 | 3 | 344.5 MiB | 32.865 s | 200, 200, 503 |
 
 All successful API responses had the same complete JSON hash, `e4cd41e1f162f67e83db211203dc055381e4d995ac624f6ec4ab2ef89b800f01`. The adjacent documentation-only pair also completed at the same checkout size, with zero changed symbols. A pinned Django checkout was rejected after clone at 113,953,449 bytes, above the 104,857,600-byte limit. These are single runs on this Windows machine. The 3-request peak can be lower than the 2-request peak because the third request is rejected and sampled memory varies between runs. The size check after analysis catches a checkout that finishes too large, but it cannot bound bytes downloaded or disk used while Git is running. Keep one server worker until admission is coordinated across processes.
+
+## Shared request deadline
+
+The API now gives repository loading and analysis one 120-second budget. Each Git command uses the smaller of its own ceiling and the remaining request time; source parsing and graph traversal check between work items. The deadline returns 504 and releases the API slot. It is cooperative for Python work and does not interrupt a single AST parse or guarantee that spawned Git descendants stop at the exact deadline.
+
+After this change, the pinned ImpactLens API comparison returned two identical 200 reports in 9.351 seconds of wall time. CLI runs of Requests and pytest kept their full report hashes (`67dac84aa64a` and `f818ed26e66e`), with totals of 11.382 and 26.515 seconds. The near-limit AutoGen API comparison returned the same report hash (`e4cd41e1f162`) in 18.953 seconds. These are individual runs on September 23, 2026, not evidence of a speed change.

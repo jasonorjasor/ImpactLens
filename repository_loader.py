@@ -5,6 +5,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
+from request_budget import check_deadline, command_timeout
+
 
 MAX_REPOSITORY_BYTES = 100 * 1024 * 1024
 GIT_TIMEOUT_SECONDS = 120
@@ -53,15 +55,19 @@ def _execute_command(arguments):
             check=True,
             capture_output=True,
             text=True,
-            timeout=GIT_TIMEOUT_SECONDS,
+            timeout=command_timeout(GIT_TIMEOUT_SECONDS),
         )
     except FileNotFoundError as error:
+        check_deadline()
         raise RepositoryLoadError("Git is required to load a repository") from error
     except subprocess.TimeoutExpired as error:
+        check_deadline()
         raise RepositoryTimeoutError("Git operation timed out") from error
     except subprocess.CalledProcessError as error:
+        check_deadline()
         message = error.stderr.strip() or "Git operation failed"
         raise RepositoryLoadError(message) from error
+    check_deadline()
     return result.stdout
 
 
@@ -127,6 +133,7 @@ def _ensure_commit(repository, commit):
 def repository_size_bytes(repository):
     total = 0
     for path in Path(repository).rglob("*"):
+        check_deadline()
         if path.is_file() and not path.is_symlink():
             total += path.stat().st_size
     return total

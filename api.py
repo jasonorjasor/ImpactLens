@@ -11,10 +11,12 @@ from repository_loader import (
     is_github_url,
     open_repository,
 )
+from request_budget import RequestDeadlineExceeded, check_deadline, request_deadline
 
 
 app = FastAPI(title="ImpactLens API")
 MAX_CONCURRENT_ANALYSES = 2
+MAX_REQUEST_SECONDS = 120
 analysis_slots = threading.BoundedSemaphore(MAX_CONCURRENT_ANALYSES)
 
 
@@ -90,17 +92,20 @@ def analyze_repository_change(request: AnalyzeRequest):
         raise HTTPException(status_code=503, detail="Analysis is busy. Try again shortly.")
 
     try:
-        with open_repository(
-            request.repository,
-            request.base_commit,
-            request.target_commit,
-        ) as repository:
-            return analyze_change(
-                repository,
+        with request_deadline(MAX_REQUEST_SECONDS):
+            with open_repository(
+                request.repository,
                 request.base_commit,
                 request.target_commit,
-            )
-    except (RepositoryTimeoutError, AnalysisTimeoutError) as error:
+            ) as repository:
+                report = analyze_change(
+                    repository,
+                    request.base_commit,
+                    request.target_commit,
+                )
+            check_deadline()
+            return report
+    except (RepositoryTimeoutError, AnalysisTimeoutError, RequestDeadlineExceeded) as error:
         raise HTTPException(status_code=504, detail=str(error)) from error
     except RepositoryLoadError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error

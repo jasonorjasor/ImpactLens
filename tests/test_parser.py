@@ -1,6 +1,15 @@
 """Tests for the ImpactLens AST extraction."""
 
-from analyzer import extract_calls, extract_functions, extract_symbols
+import pytest
+
+from analyzer import analyze_sources, extract_calls, extract_functions, extract_symbols
+from request_budget import RequestDeadlineExceeded, request_deadline
+
+
+def test_analysis_stops_at_a_file_boundary_when_request_time_expires():
+    with request_deadline(0):
+        with pytest.raises(RequestDeadlineExceeded):
+            analyze_sources({"example.py": b"def work():\n    return 1\n"})
 
 
 def test_extracts_function_names_and_line_ranges():

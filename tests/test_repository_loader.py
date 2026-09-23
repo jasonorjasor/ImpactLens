@@ -3,6 +3,7 @@ import subprocess
 import pytest
 
 import repository_loader
+from request_budget import request_deadline
 from repository_loader import (
     RepositoryLoadError,
     RepositoryTimeoutError,
@@ -151,3 +152,18 @@ def test_rejects_repository_that_grows_during_analysis(monkeypatch):
     with pytest.raises(RepositoryLoadError, match="Repository is too large"):
         with open_repository("https://github.com/owner/repository", "base", "target"):
             pass
+
+
+def test_git_command_uses_remaining_request_time(monkeypatch):
+    seen = []
+
+    def fake_run(*args, **kwargs):
+        seen.append(kwargs["timeout"])
+        return subprocess.CompletedProcess(args[0], 0, "", "")
+
+    monkeypatch.setattr(repository_loader.subprocess, "run", fake_run)
+    with request_deadline(1):
+        repository_loader._execute_command(["git", "version"])
+
+    assert len(seen) == 1
+    assert 0 < seen[0] <= 1
