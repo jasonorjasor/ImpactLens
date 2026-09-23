@@ -73,7 +73,8 @@ python -m uvicorn api:app --reload
 The API provides `GET /health` and `POST /analyze`. FastAPI's interactive documentation is available at `http://127.0.0.1:8000/docs`.
 `POST /analyze` validates its response against the report model before returning JSON. Invalid requests return 422; repository loading errors return 400.
 The API runs at most two analyses at once per process; extra requests return 503. Git loading commands time out after 120 seconds and Git commands during analysis after 60 seconds; timeouts return 504.
-The 100 MB repository limit is checked after cloning and after each commit fetch. It is not a hard download cap or a timeout for the whole request.
+The 100 MiB repository limit is checked after cloning, after each commit fetch, and after analysis. It is not a hard download cap or a timeout for the whole request.
+For a server without development reload, use one worker: `python -m uvicorn api:app --workers 1`. Each additional worker would have its own two-analysis limit; deployment capacity and shared admission control have not been established.
 
 ## Run the frontend
 
@@ -104,4 +105,4 @@ Open the local URL printed by Vite. The frontend sends analysis requests to the 
 ImpactLens analyzes Python source statically. It does not run the code, and it cannot always resolve dynamic calls, reflection, or code generated at runtime.
 Working-tree mode includes tracked and untracked Python changes saved to disk. Unsaved editor changes are not included.
 Renames are detected from Git metadata or conservative file-content similarity; ambiguous cases may be reported as separate additions and deletions.
-Public GitHub repositories are limited to HTTPS URLs and a 100 MB cloned-repository size limit.
+Public GitHub repositories are limited to HTTPS URLs and a 100 MiB cloned-repository size limit.

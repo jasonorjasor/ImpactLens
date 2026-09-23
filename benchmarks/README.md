@@ -50,3 +50,15 @@ One Windows/Python 3.14 run per setting on September 22, 2026 gave:
 | pytest | 131.0 / 192.6 / 197.2 MiB | 17.129 / 23.672 / 25.097 s | 200, 200, 503 | `64c9b4df15a2` |
 
 Every 200 response in a repository's three settings had the same complete JSON hash and zero analysis errors. The rejected requests returned the API's busy message in 0.018–0.046 seconds. The sampler checks RSS about every 20 ms while requests run. Summing RSS can count shared memory more than once, and brief Git peaks can fall between samples; the result is an observed process-tree footprint, not an exact peak or unique-memory total. GitHub download speed and machine load affect wall times. These single runs support the existing two-slot behavior for these repositories but do not establish a safe 100 MB repository limit, a total request deadline, or capacity across server processes.
+
+## Near-limit check
+
+On September 23, 2026, the pinned [AutoGen](https://github.com/microsoft/autogen) pair `b0477309d2a0baf489aa256646e41e513ab3bfe8` → `8544314fa6cc9f906c3ec2395927f5404ffbb5eb` loaded at 98,437,059 bytes (93.9 MiB). Analysis grew its checkout to 98,446,098 bytes. It reported 5 changed symbols, 1 evidence path, and no errors; the complete CLI JSON hash was `f513c6f1679b5d34efb835bffbd1f9121b63a0a72ab39bf217dfdfdfad679105` before and after the final size check was added.
+
+| Requests | Sampled peak summed RSS | Wall time | HTTP results |
+| --- | ---: | ---: | --- |
+| 1 | 227.5 MiB | 19.064 s | 200 |
+| 2 | 393.2 MiB | 27.128 s | 200, 200 |
+| 3 | 344.5 MiB | 32.865 s | 200, 200, 503 |
+
+All successful API responses had the same complete JSON hash, `e4cd41e1f162f67e83db211203dc055381e4d995ac624f6ec4ab2ef89b800f01`. The adjacent documentation-only pair also completed at the same checkout size, with zero changed symbols. A pinned Django checkout was rejected after clone at 113,953,449 bytes, above the 104,857,600-byte limit. These are single runs on this Windows machine. The 3-request peak can be lower than the 2-request peak because the third request is rejected and sampled memory varies between runs. The size check after analysis catches a checkout that finishes too large, but it cannot bound bytes downloaded or disk used while Git is running. Keep one server worker until admission is coordinated across processes.

@@ -140,3 +140,14 @@ def test_rejects_repository_after_first_commit_fetch(monkeypatch):
             pass
 
     assert [command[-1] for command in commands if "fetch" in command] == ["base"]
+
+
+def test_rejects_repository_that_grows_during_analysis(monkeypatch):
+    sizes = iter([0, 0, 0, repository_loader.MAX_REPOSITORY_BYTES + 1])
+    monkeypatch.setattr(repository_loader, "_run_command", lambda arguments: None)
+    monkeypatch.setattr(repository_loader, "_commit_exists", lambda *_: True)
+    monkeypatch.setattr(repository_loader, "repository_size_bytes", lambda _: next(sizes))
+
+    with pytest.raises(RepositoryLoadError, match="Repository is too large"):
+        with open_repository("https://github.com/owner/repository", "base", "target"):
+            pass

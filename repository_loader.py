@@ -190,3 +190,4 @@ def open_repository(location, base_commit=None, target_commit=None, max_bytes=MA
         enforce_repository_size(repository, max_bytes)
 
         yield repository
+        enforce_repository_size(repository, max_bytes)

@@ -148,6 +148,24 @@ def test_analyze_returns_loader_error_as_http_error(monkeypatch):
     assert response.json() == {"detail": "commit not found"}
 
 
+def test_analyze_returns_post_analysis_size_error_and_releases_slot(monkeypatch, tmp_path):
+    monkeypatch.setattr(api, "analysis_slots", threading.BoundedSemaphore(1))
+
+    @contextmanager
+    def growing_repository(*args):
+        yield tmp_path
+        raise api.RepositoryLoadError("Repository is too large")
+
+    monkeypatch.setattr(api, "open_repository", growing_repository)
+    monkeypatch.setattr(api, "analyze_change", lambda *args: empty_report())
+
+    first = client.post("/analyze", json=request)
+    second = client.post("/analyze", json=request)
+
+    assert first.status_code == second.status_code == 400
+    assert first.json() == second.json() == {"detail": "Repository is too large"}
+
+
 def test_analyze_rejects_a_malformed_analyzer_result(monkeypatch, tmp_path):
     @contextmanager
     def fake_loader(*args):
