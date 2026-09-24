@@ -88,6 +88,8 @@ npm run dev
 
 Open the local URL printed by Vite. The frontend sends analysis requests to the API through the development proxy.
 
+To preview the built app with one server, build the frontend with `npm run build`, then run `python -m uvicorn web:create_app --factory --workers 1` from the project folder. Open `http://127.0.0.1:8000`. The built frontend and API share the same address; this command reports a clear error if the frontend has not been built. Keep one worker until a deployment host and shared capacity limit are chosen.
+
 ## Main files
 
 - `analyzer.py` contains the Python parsing and dependency analysis.
@@ -95,6 +97,7 @@ Open the local URL printed by Vite. The frontend sends analysis requests to the 
 - `cli.py` formats an impact report for the terminal or as JSON.
 - `repository_loader.py` validates and temporarily clones public GitHub repositories.
 - `api.py` exposes the analyzer through FastAPI.
+- `web.py` serves a built frontend alongside the API.
 - `frontend/` contains the React interface.
 - `pyproject.toml` contains project tool configuration.
 - `tests/` contains the tests.
