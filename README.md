@@ -73,7 +73,7 @@ python -m uvicorn api:app --reload
 The API provides `GET /health` and `POST /analyze`. FastAPI's interactive documentation is available at `http://127.0.0.1:8000/docs`.
 `POST /analyze` validates its response against the report model before returning JSON. Invalid requests return 422; repository loading errors return 400.
 The API runs at most two analyses at once per process; extra requests return 503. Each analysis request has a 120-second deadline. Git loading commands have a 120-second ceiling and Git commands during analysis have a 60-second ceiling; each also uses the remaining request time. Timeouts return 504. Python analysis checks the deadline between files and graph work, so a single long operation can finish before the deadline is noticed.
-The 100 MiB repository limit is checked after cloning, after each commit fetch, and after analysis. It is not a hard download cap or a timeout for the whole request.
+For public GitHub repositories, the temporary checkout is sampled while Git runs and Git's process tree is stopped if it exceeds 100 MiB. Size is also checked after cloning, after each commit fetch, and after analysis. Sampling can overshoot the limit between checks; this is a disk-use guard, not a network download cap.
 For a server without development reload, use one worker: `python -m uvicorn api:app --workers 1`. Each additional worker would have its own two-analysis limit; deployment capacity and shared admission control have not been established.
 
 ## Run the frontend

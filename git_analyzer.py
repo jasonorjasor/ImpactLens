@@ -5,6 +5,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from git_process import GitDiskLimitExceeded, run_git_command
+from repository_loader import RepositoryLoadError
 from analyzer import (
     analyze_sources,
     analyze_repository,
@@ -25,13 +27,13 @@ class AnalysisTimeoutError(RuntimeError):
 
 def run_git(repository, *arguments, binary=False, input_data=None):
     try:
-        result = subprocess.run(
+        result = run_git_command(
             ["git", "-C", str(repository), *arguments],
-            check=True,
-            capture_output=True,
-            input=input_data,
+            input_data=input_data,
             timeout=command_timeout(GIT_TIMEOUT_SECONDS),
         )
+    except GitDiskLimitExceeded as error:
+        raise RepositoryLoadError(str(error)) from error
     except subprocess.TimeoutExpired as error:
         check_deadline()
         raise AnalysisTimeoutError("Analysis Git command timed out") from error

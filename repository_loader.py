@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
+from git_process import GitDiskLimitExceeded, guard_repository, run_git_command
 from request_budget import check_deadline, command_timeout
 
 
@@ -50,13 +51,13 @@ def is_github_url(value):
 
 def _execute_command(arguments):
     try:
-        result = subprocess.run(
+        result = run_git_command(
             arguments,
-            check=True,
-            capture_output=True,
             text=True,
             timeout=command_timeout(GIT_TIMEOUT_SECONDS),
         )
+    except GitDiskLimitExceeded as error:
+        raise RepositoryLoadError(str(error)) from error
     except FileNotFoundError as error:
         check_deadline()
         raise RepositoryLoadError("Git is required to load a repository") from error
@@ -134,8 +135,11 @@ def repository_size_bytes(repository):
     total = 0
     for path in Path(repository).rglob("*"):
         check_deadline()
-        if path.is_file() and not path.is_symlink():
-            total += path.stat().st_size
+        try:
+            if path.is_file() and not path.is_symlink():
+                total += path.stat().st_size
+        except FileNotFoundError:
+            continue
     return total
 
 
@@ -163,38 +167,39 @@ def open_repository(location, base_commit=None, target_commit=None, max_bytes=MA
 
     with tempfile.TemporaryDirectory(prefix="impactlens-") as temporary_directory:
         repository = Path(temporary_directory) / "repository"
-        try:
+        with guard_repository(repository, max_bytes, repository_size_bytes):
+            try:
+                _run_command(
+                    [
+                        "git",
+                        "clone",
+                        "--no-tags",
+                        "--filter=blob:none",
+                        repository_url,
+                        str(repository),
+                    ]
+                )
+            except RepositoryLoadError as error:
+                if isinstance(error.__cause__, subprocess.CalledProcessError):
+                    raise RepositoryLoadError(
+                        "Could not access this public GitHub repository. Check the URL and your connection."
+                    ) from error
+                raise
+            enforce_repository_size(repository, max_bytes)
             _run_command(
                 [
                     "git",
-                    "clone",
-                    "--no-tags",
-                    "--filter=blob:none",
-                    repository_url,
+                    "-C",
                     str(repository),
+                    "config",
+                    "http.sslBackend",
+                    "openssl",
                 ]
             )
-        except RepositoryLoadError as error:
-            if isinstance(error.__cause__, subprocess.CalledProcessError):
-                raise RepositoryLoadError(
-                    "Could not access this public GitHub repository. Check the URL and your connection."
-                ) from error
-            raise
-        enforce_repository_size(repository, max_bytes)
-        _run_command(
-            [
-                "git",
-                "-C",
-                str(repository),
-                "config",
-                "http.sslBackend",
-                "openssl",
-            ]
-        )
-        _ensure_commit(repository, base_commit)
-        enforce_repository_size(repository, max_bytes)
-        _ensure_commit(repository, target_commit)
-        enforce_repository_size(repository, max_bytes)
+            _ensure_commit(repository, base_commit)
+            enforce_repository_size(repository, max_bytes)
+            _ensure_commit(repository, target_commit)
+            enforce_repository_size(repository, max_bytes)
 
-        yield repository
-        enforce_repository_size(repository, max_bytes)
+            yield repository
+            enforce_repository_size(repository, max_bytes)

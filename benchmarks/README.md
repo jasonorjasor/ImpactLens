@@ -39,7 +39,7 @@ Both runs in each pair matched the single-run report hash. Peak memory is the Py
 
 ## API and Git process check
 
-Install the optional sampler with `python -m pip install -e ".[benchmark]"`. Run `python -m benchmarks.api_load REPOSITORY BASE_COMMIT TARGET_COMMIT --requests 1`, then repeat with `--requests 2` and `--requests 3` in fresh processes. Each command starts a local API server, sends requests together, samples its process and Git children, checks successful report hashes, and expects a 503 when a third request overlaps the two API slots.
+Run `python -m benchmarks.api_load REPOSITORY BASE_COMMIT TARGET_COMMIT --requests 1`, then repeat with `--requests 2` and `--requests 3` in fresh processes. Each command starts a local API server, sends requests together, samples its process and Git children, checks successful report hashes, and expects a 503 when a third request overlaps the two API slots.
 
 One Windows/Python 3.14 run per setting on September 22, 2026 gave:
 
@@ -68,3 +68,9 @@ All successful API responses had the same complete JSON hash, `e4cd41e1f162f67e8
 The API now gives repository loading and analysis one 120-second budget. Each Git command uses the smaller of its own ceiling and the remaining request time; source parsing and graph traversal check between work items. The deadline returns 504 and releases the API slot. It is cooperative for Python work and does not interrupt a single AST parse or guarantee that spawned Git descendants stop at the exact deadline.
 
 After this change, the pinned ImpactLens API comparison returned two identical 200 reports in 9.351 seconds of wall time. CLI runs of Requests and pytest kept their full report hashes (`67dac84aa64a` and `f818ed26e66e`), with totals of 11.382 and 26.515 seconds. The near-limit AutoGen API comparison returned the same report hash (`e4cd41e1f162`) in 18.953 seconds. These are individual runs on September 23, 2026, not evidence of a speed change.
+
+## Active disk guard
+
+Temporary public checkouts now have a size watcher while Git commands run, including Git blob reads during analysis. If the checkout exceeds 100 MiB, the watcher stops Git and its descendants. The existing checks after loading stages and analysis remain. The watcher samples about every 100 ms, so disk use can briefly exceed the threshold, and the amount downloaded over the network is not bounded by this size check. Local-path analyses are unaffected.
+
+On September 23, the pinned ImpactLens, Requests, and pytest comparisons kept their full report hashes (`a18e17902cd4`, `67dac84aa64a`, and `f818ed26e66e`) with zero analysis errors. Their total times were 11.108, 12.832, and 23.137 seconds. A two-request AutoGen API run returned two 200 responses with the same full report hash (`e4cd41e1f162`), 32.684 seconds wall time, and 334.5 MB sampled peak summed RSS. These single runs check report stability and live API behavior, not a speed or deployment-capacity improvement. A local test forces a growing checkout over a small limit and confirms the child writer stops.
