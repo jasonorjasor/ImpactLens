@@ -3,6 +3,7 @@
 ImpactLens analyzes Python code changes and shows what may be affected.
 
 For a repeatable walkthrough, see [DEMO.md](DEMO.md).
+For small hand-reviewed examples and a known missed dependency, see [benchmarks/ACCURACY.md](benchmarks/ACCURACY.md).
 For the proposed Docker deployment and host checks, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 It currently:
@@ -19,6 +20,23 @@ It currently:
 ImpactLens reads Python source without executing it. A reported path is a possible dependency, not proof of a failure. An empty report does not prove a change is safe.
 
 Dynamic calls such as `getattr`, runtime-selected callbacks, monkey-patching, and generated code can be missed. Import and method resolution uses source-level rules rather than a full type system, so ambiguous calls may be unresolved or matched imperfectly. The analyzer does not run tests or analyze JavaScript, configuration, database changes, or external services. Parse errors are included in the report and indicate incomplete analysis.
+
+Working-tree mode reads saved files, not unsaved editor changes. Rename detection uses Git metadata or conservative file similarity; ambiguous cases may appear as an addition and deletion.
+
+## Install locally
+
+Install Git, Python, and Node.js. Python 3.14 and Node.js 22 are the verified container runtimes; the package requires Python 3.11 or newer, but older Python versions have not been checked in CI.
+
+Clone the repository, then run from its folder:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install ".[test]"
+```
+
+Use `.\.venv\Scripts\python.exe` in place of `python` in the commands below, or activate the environment first. On Linux/macOS, use `.venv/bin/python`. Run the web app from the repository folder so it can find the built frontend.
+
+Install frontend dependencies once from `frontend/` with `npm ci --cache .npm-cache`.
 
 ## Run the tests
 
@@ -89,7 +107,7 @@ Start the API first, then in a second terminal:
 
 ```powershell
 cd frontend
-npm install --cache .npm-cache
+npm ci --cache .npm-cache
 npm run dev
 ```
 
@@ -109,10 +127,3 @@ To preview the built app with one server, build the frontend with `npm run build
 - `pyproject.toml` contains project tool configuration.
 - `tests/` contains the tests.
 - `examples/` contains small repositories used by the tests and lessons.
-
-## Current limitations
-
-ImpactLens analyzes Python source statically. It does not run the code, and it cannot always resolve dynamic calls, reflection, or code generated at runtime.
-Working-tree mode includes tracked and untracked Python changes saved to disk. Unsaved editor changes are not included.
-Renames are detected from Git metadata or conservative file-content similarity; ambiguous cases may be reported as separate additions and deletions.
-Public GitHub repositories are limited to HTTPS URLs and a 100 MiB cloned-repository size limit.

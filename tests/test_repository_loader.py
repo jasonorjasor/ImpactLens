@@ -3,7 +3,7 @@ import subprocess
 import pytest
 
 import repository_loader
-from request_budget import request_deadline
+from request_budget import RequestDeadlineExceeded, request_deadline
 from repository_loader import (
     RepositoryLoadError,
     RepositoryTimeoutError,
@@ -101,6 +101,52 @@ def test_fetch_timeout_keeps_its_specific_message(monkeypatch, tmp_path):
 
     with pytest.raises(RepositoryLoadError, match="Git operation timed out"):
         repository_loader._ensure_commit(tmp_path, "missing")
+
+
+@pytest.mark.parametrize("failure", [
+    RepositoryTimeoutError("Git operation timed out"),
+    RepositoryLoadError("Repository is too large"),
+    RepositoryLoadError("Git is required"),
+    RequestDeadlineExceeded("request deadline"),
+])
+def test_commit_check_failure_does_not_attempt_fetch(monkeypatch, tmp_path, failure):
+    commands = []
+
+    def fail(arguments):
+        commands.append(arguments)
+        raise failure
+
+    monkeypatch.setattr(repository_loader, "_run_command", fail)
+    with pytest.raises(type(failure)) as raised:
+        repository_loader._ensure_commit(tmp_path, "commit")
+    assert raised.value is failure
+    assert len(commands) == 1
+    assert "fetch" not in commands[0]
+
+
+def test_missing_commit_is_fetched_then_verified(monkeypatch, tmp_path):
+    commands = []
+
+    def run(arguments):
+        commands.append(arguments)
+        if len(commands) == 1:
+            cause = subprocess.CalledProcessError(1, arguments, stderr="")
+            raise RepositoryLoadError("Git operation failed") from cause
+        return "commit"
+
+    monkeypatch.setattr(repository_loader, "_run_command", run)
+    repository_loader._ensure_commit(tmp_path, "commit")
+    assert [command[3] for command in commands] == ["rev-parse", "fetch", "rev-parse"]
+
+
+def test_git_operational_error_is_not_a_missing_commit(monkeypatch, tmp_path):
+    def fail(arguments):
+        cause = subprocess.CalledProcessError(128, arguments, stderr="not a repository")
+        raise RepositoryLoadError(cause.stderr) from cause
+
+    monkeypatch.setattr(repository_loader, "_run_command", fail)
+    with pytest.raises(RepositoryLoadError, match="not a repository"):
+        repository_loader._commit_exists(tmp_path, "commit")
 
 
 def test_rejects_oversized_clone_before_fetch(monkeypatch):

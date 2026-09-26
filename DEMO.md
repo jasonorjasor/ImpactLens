@@ -45,3 +45,21 @@ This change only adds the README. The report should have no changed functions or
 These are examples, not accuracy benchmarks. ImpactLens performs static analysis and can miss dynamic calls or report possible impacts that do not fail at runtime.
 
 All three public commit pairs were rechecked on September 26, 2026 with zero analysis errors. Case 1 returned 7 changed symbols and 3 evidence paths; case 2 included the deleted function and the historical `POST /analyze` route; case 3 returned no changed symbols or evidence paths.
+
+## Verification and presentation checklist
+
+The built app was checked through the browser on September 26, 2026, using a
+fresh Python installation. All three cases completed with their expected
+highlights. Submission showed a disabled loading button. An invalid commit
+displayed an error and cleared the preceding report; a corrected submission
+recovered successfully. Frontend tests and a fresh production build also passed.
+These browser checks are manual and are not part of automated CI.
+
+Before recording or presenting:
+
+- Start the built app using the README commands and have these commit pairs ready.
+- Explain one path as "changed function → caller → test."
+- Explain that historical paths describe the old version.
+- Mention the [dynamic-call example](benchmarks/ACCURACY.md) that misses a real dependency.
+- Describe memory figures as samples from particular workloads, not a guarantee for every repository.
+- Record or rehearse the walkthrough above. A live host is optional; no paid service is required.

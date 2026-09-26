@@ -95,12 +95,16 @@ def _commit_exists(repository, commit):
                 str(repository),
                 "rev-parse",
                 "--verify",
+                "--quiet",
                 "--end-of-options",
                 f"{commit}^{{commit}}",
             ]
         )
-    except RepositoryLoadError:
-        return False
+    except RepositoryLoadError as error:
+        cause = error.__cause__
+        if isinstance(cause, subprocess.CalledProcessError) and cause.returncode == 1:
+            return False
+        raise
     return True
 
 
