@@ -4,7 +4,7 @@ Hosting is optional for version 1. A local walkthrough or recording using `DEMO.
 
 The proposed first host is a Render Docker web service on the `1c-2g` plan (1 CPU, 2 GB RAM). Review the price in Render before creating it. The configuration uses one instance and one Uvicorn worker, with automatic deployments disabled.
 
-Status: prepared locally; the container build and Linux tests have not been run because Docker is not installed on the development machine. Run the checks below before deploying.
+Status: the Linux container build, Python tests, frontend tests, and production page/health checks passed on September 26, 2026 in [GitHub Actions](https://github.com/jasonorjasor/ImpactLens/actions/runs/36231189852), for commit `2205451`. This verifies the container workflow, not a live deployment or host capacity.
 
 The `Container verification` GitHub Actions workflow builds the Linux test image, runs Python tests, builds the production image, and checks its page and `/health` using a custom port. Frontend tests run during the image build. A passing workflow run is required evidence; merely adding the workflow does not verify the image. It does not measure deployment-host capacity.
 
