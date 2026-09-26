@@ -26,7 +26,7 @@ jobs:
       - name: Check production server
         run: |
           docker run -d --name impactlens-check --memory 2g --cpus 1 -e PORT=8080 -p 8080:8080 impactlens
-          curl --retry 20 --retry-connrefused --retry-delay 1 --fail --silent --show-error http://127.0.0.1:8080/health
+          curl --retry 20 --retry-all-errors --retry-delay 1 --retry-max-time 30 --max-time 2 --fail --silent --show-error http://127.0.0.1:8080/health
           curl --fail --silent --show-error http://127.0.0.1:8080/ | grep -q 'id="root"'
       - name: Show server logs and stop container
         if: always()
