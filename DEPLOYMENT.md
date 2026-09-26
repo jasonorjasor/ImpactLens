@@ -9,6 +9,7 @@ Status: prepared locally; the container build and Linux tests have not been run 
 The `Container verification` GitHub Actions workflow builds the Linux test image, runs Python tests, builds the production image, and checks its page and `/health` using a custom port. Frontend tests run during the image build. A passing workflow run is required evidence; merely adding the workflow does not verify the image. It does not measure deployment-host capacity.
 
 The Docker build compiles the frontend, installs Python dependencies and Git, and serves the built frontend and API together. It runs as an unprivileged user. Render supplies `PORT`; locally the container uses port 8000. `/health` is the readiness check.
+Tini runs as the container's init process to forward shutdown signals and reap orphaned child processes. This matters when the disk guard or timeout stops Git and its descendants.
 
 ## Verify the container locally
 

@@ -10,7 +10,7 @@ RUN npm test && npm run build
 FROM python:3.14-slim AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
+    && apt-get install -y --no-install-recommends git ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY pyproject.toml *.py ./
@@ -20,6 +20,7 @@ COPY --from=frontend /frontend/dist ./frontend/dist
 RUN useradd --create-home --uid 10001 impactlens
 USER impactlens
 EXPOSE 8000
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["sh", "-c", "exec python -m uvicorn web:create_app --factory --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
 
 FROM runtime AS test
