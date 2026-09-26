@@ -3,6 +3,7 @@
 ImpactLens analyzes Python code changes and shows what may be affected.
 
 For a repeatable walkthrough, see [DEMO.md](DEMO.md).
+For the proposed Docker deployment and host checks, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 It currently:
 
