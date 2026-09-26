@@ -1,8 +1,12 @@
 # Initial deployment
 
+Hosting is optional for version 1. A local walkthrough or recording using `DEMO.md` is sufficient to demonstrate the app. The paid configuration below is a proposal, not a requirement or an approved expense.
+
 The proposed first host is a Render Docker web service on the `1c-2g` plan (1 CPU, 2 GB RAM). Review the price in Render before creating it. The configuration uses one instance and one Uvicorn worker, with automatic deployments disabled.
 
 Status: prepared locally; the container build and Linux tests have not been run because Docker is not installed on the development machine. Run the checks below before deploying.
+
+The `Container verification` GitHub Actions workflow builds the Linux test image, runs Python tests, builds the production image, and checks its page and `/health` using a custom port. Frontend tests run during the image build. A passing workflow run is required evidence; merely adding the workflow does not verify the image. It does not measure deployment-host capacity.
 
 The Docker build compiles the frontend, installs Python dependencies and Git, and serves the built frontend and API together. It runs as an unprivileged user. Render supplies `PORT`; locally the container uses port 8000. `/health` is the readiness check.
 

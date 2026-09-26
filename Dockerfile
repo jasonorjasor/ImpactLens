@@ -4,7 +4,8 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/index.html frontend/vite.config.js ./
 COPY frontend/src ./src
-RUN npm run build
+COPY frontend/tests ./tests
+RUN npm test && npm run build
 
 FROM python:3.14-slim AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1

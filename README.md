@@ -14,6 +14,12 @@ It currently:
 - identifies affected FastAPI routes and pytest tests
 - shows dependency paths from changed code to callers
 
+## Limitations
+
+ImpactLens reads Python source without executing it. A reported path is a possible dependency, not proof of a failure. An empty report does not prove a change is safe.
+
+Dynamic calls such as `getattr`, runtime-selected callbacks, monkey-patching, and generated code can be missed. Import and method resolution uses source-level rules rather than a full type system, so ambiguous calls may be unresolved or matched imperfectly. The analyzer does not run tests or analyze JavaScript, configuration, database changes, or external services. Parse errors are included in the report and indicate incomplete analysis.
+
 ## Run the tests
 
 From the project folder:

@@ -1,0 +1,37 @@
+name: Container verification
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build Linux test image
+        run: docker build --target test -t impactlens-tests .
+      - name: Run Python tests
+        run: docker run --rm --memory 2g --cpus 1 impactlens-tests
+      - name: Build production image
+        run: docker build -t impactlens .
+      - name: Check production server
+        run: |
+          docker run -d --name impactlens-check --memory 2g --cpus 1 -e PORT=8080 -p 8080:8080 impactlens
+          curl --retry 20 --retry-connrefused --retry-delay 1 --fail --silent --show-error http://127.0.0.1:8080/health
+          curl --fail --silent --show-error http://127.0.0.1:8080/ | grep -q 'id="root"'
+      - name: Show server logs and stop container
+        if: always()
+        run: |
+          if docker inspect impactlens-check >/dev/null 2>&1; then
+            docker logs impactlens-check
+            docker stop impactlens-check
+          fi
