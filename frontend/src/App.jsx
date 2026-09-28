@@ -14,21 +14,44 @@ function isTestIdentifier(identifier) {
   return parts.includes('tests') || file.startsWith('test_') || file.endsWith('_test.py')
 }
 
-function Section({ title, items, renderItem, emptyText = 'None found' }) {
+function SymbolLabel({ identifier }) {
+  const [file, ...name] = identifier.split('::')
+  return (
+    <span className="symbol-label">
+      <code className="symbol-name">{name.join('::') || file}</code>
+      {name.length > 0 && <span className="symbol-file">in <code>{file}</code></span>}
+    </span>
+  )
+}
+
+function Section({ title, description, items, renderItem, emptyText = 'None found', collapseAfter, moreLabel }) {
+  const visibleItems = collapseAfter ? items.slice(0, collapseAfter) : items
+  const hiddenItems = collapseAfter ? items.slice(collapseAfter) : []
   return (
     <section className="result-section">
       <div className="section-heading">
-        <h2>{title}</h2>
+        <h3>{title}</h3>
         <span className="count">{items.length}</span>
       </div>
+      {description && <p className="section-description">{description}</p>}
       {items.length === 0 ? (
         <p className="empty">{emptyText}</p>
       ) : (
         <ul className="result-list">
-          {items.map((item, index) => (
+          {visibleItems.map((item, index) => (
             <li key={index}>{renderItem(item)}</li>
           ))}
         </ul>
+      )}
+      {hiddenItems.length > 0 && (
+        <details className="more-results">
+          <summary>Show {hiddenItems.length} more {moreLabel}</summary>
+          <ul className="result-list">
+            {hiddenItems.map((item, index) => (
+              <li key={index}>{renderItem(item)}</li>
+            ))}
+          </ul>
+        </details>
       )}
     </section>
   )
@@ -39,36 +62,49 @@ function ImpactSummary({ report, historical = false, changedIds }) {
   return (
     <div className="result-grid">
       <Section
-        title={historical ? 'Historical routes' : 'Affected routes'}
+        title={historical ? 'Routes in the older version' : 'Routes to review'}
+        description={historical
+          ? 'These routes may have called deleted code before the change.'
+          : 'App URLs changed directly or linked to changed code.'}
         items={report.affected_routes}
         renderItem={(route) => (
           <>
             <span className="method">{route.method}</span> <code>{route.path}</code>
-            <span className="detail">{route.symbol_id}</span>
+            <span className="detail">Handled by <SymbolLabel identifier={route.symbol_id} /></span>
             <span className="detail">
-              {changedIds.has(route.symbol_id) ? 'Changed directly' : 'Reached via calls'}
+              {changedIds.has(route.symbol_id)
+                ? (historical ? 'Deleted code in the older version' : 'Changed in this comparison')
+                : 'Linked through calls'}
             </span>
           </>
         )}
       />
       <Section
-        title={historical ? 'Historical related tests' : 'Related tests'}
+        title={historical ? 'Tests in the older version' : 'Additional tests to review'}
+        description={historical
+          ? 'These tests may have called deleted code before the change.'
+          : 'Tests that were not edited but may use changed code.'}
         items={relatedTests}
-        emptyText={report.related_tests.length > 0 ? 'Changed tests are listed above' : 'None found'}
+        emptyText={report.related_tests.length > 0
+          ? (historical
+            ? 'The deleted tests appear under Changes above.'
+            : 'The linked tests were edited in this commit and appear under Changes above.')
+          : 'No additional tests found.'}
         renderItem={(test) => (
           <>
-            <code>{test}</code>
-            <span className="detail">Reached via calls</span>
+            <SymbolLabel identifier={test} />
+            <span className="detail">Linked through calls</span>
           </>
         )}
       />
       <Section
-        title={historical ? 'Historical callers' : 'Affected code'}
+        title={historical ? 'Other callers in the older version' : 'Other code callers'}
+        description="Code outside the Changes list that may call changed code."
         items={report.affected_symbols.filter(
           (symbol) => !changedIds.has(symbol) && !isTestIdentifier(symbol),
         )}
-        emptyText="No additional code callers found"
-        renderItem={(symbol) => <code>{symbol}</code>}
+        emptyText="No other code callers found."
+        renderItem={(symbol) => <SymbolLabel identifier={symbol} />}
       />
     </div>
   )
@@ -81,6 +117,9 @@ export function Report({ report }) {
   const baseChangedIds = new Set(report.changed_symbols
     .filter((symbol) => symbol.change_type === 'deleted')
     .map((symbol) => symbol.id))
+  const displayPaths = [...report.evidence_paths].sort(
+    (left, right) => Number(right.source === 'base') - Number(left.source === 'base'),
+  )
   return (
     <div className="report">
       <div className="report-heading">
@@ -92,56 +131,77 @@ export function Report({ report }) {
           <code>{report.base_commit}</code> → <code>{report.target_commit}</code>
         </p>
       </div>
-      <p className="caution">
-        These are possible impacts found from Python source. ImpactLens does not run the code.
-      </p>
+      <div className="report-explainer">
+        <p>
+          <strong>{report.changed_symbols.length} Python functions or classes changed.</strong>{' '}
+          The groups below show the changed code and possible callers.
+        </p>
+        <p>ImpactLens reads source code. A link suggests a dependency; it does not mean anything failed.</p>
+      </div>
       <div className="result-grid">
         <Section
-          title="Changed functions"
+          title="Changes in this comparison"
+          description="Functions, classes, and tests whose Python code differs between the two versions."
           items={report.changed_symbols}
+          emptyText="No changed Python functions or classes found. Other file types are outside this analysis."
           renderItem={(symbol) => (
             <>
-              <code>{symbol.id}</code>
-              {isTestIdentifier(symbol.id) && <span className="detail">Test code</span>}
-              {symbol.change_type && <span className="detail">{symbol.change_type}</span>}
-              {symbol.changed_lines?.length > 0 && (
-                <span className="detail">Lines {symbol.changed_lines.join(', ')}</span>
-              )}
-              {symbol.removed_lines?.length > 0 && (
-                <span className="detail">
-                  Removed lines (base version): {symbol.removed_lines.join(', ')}
-                </span>
+              <SymbolLabel identifier={symbol.id} />
+              <span className="detail">
+                {isTestIdentifier(symbol.id) ? 'Test code · ' : ''}
+                {symbol.change_type === 'added' ? 'Added' : symbol.change_type === 'deleted' ? 'Deleted' : 'Changed'}
+              </span>
+              {(symbol.changed_lines?.length > 0 || symbol.removed_lines?.length > 0) && (
+                <details className="line-details">
+                  <summary>Show line numbers</summary>
+                  {symbol.changed_lines?.length > 0 && (
+                    <span className="detail">Newer version: {symbol.changed_lines.join(', ')}</span>
+                  )}
+                  {symbol.removed_lines?.length > 0 && (
+                    <span className="detail">Older version, removed lines: {symbol.removed_lines.join(', ')}</span>
+                  )}
+                </details>
               )}
             </>
           )}
         />
       </div>
-      <p>Results from the target version:</p>
+      <h3 className="group-heading">Possible effects in the newer version</h3>
       <ImpactSummary report={report} changedIds={targetChangedIds} />
       {baseChangedIds.size > 0 && (
         <>
+          <h3 className="group-heading">What used to depend on deleted code</h3>
           <p className="caution">
-            Historical results come from the base version. These functions, routes,
-            and tests may no longer exist or depend on the deleted code.
+            These links come from the older version. The callers, routes, and tests
+            may no longer exist in the newer version.
           </p>
           <ImpactSummary report={report.historical_impact} historical changedIds={baseChangedIds} />
         </>
       )}
       <Section
-        title="Impact paths"
-        items={report.evidence_paths}
-        emptyText={report.changed_symbols.length > 0 ? 'No caller paths found' : 'No changed functions found'}
+        title="Possible caller paths"
+        description={baseChangedIds.size > 0
+          ? 'Older-version paths appear first. Each step calls the one above it. These paths suggest what to review, not what failed.'
+          : 'Start with changed code. Each next step is code that calls the step above it. A path suggests what to review, not what failed.'}
+        items={displayPaths}
+        collapseAfter={5}
+        moreLabel="paths"
+        emptyText={report.changed_symbols.length > 0 ? 'No caller paths found.' : 'No changed Python functions or classes found.'}
         renderItem={(path) => (
-          <div className="path">
-            <span className="detail">
-              {path.source === 'base' ? 'Base version (historical)' : 'Target version'}
+          <div className="path-card">
+            <span className="path-source">
+              {path.source === 'base' ? 'Older version, before deletion' : 'Newer version'}
             </span>
-            {path.symbols.map((symbol, index) => (
-              <span key={index}>
-                {index > 0 && <span className="arrow">→</span>}
-                <code>{symbol}</code>
-              </span>
-            ))}
+            <ol className="path-steps">
+              {path.symbols.map((symbol, index) => (
+                <li key={index}>
+                  <span className="step-label">
+                    {index === 0 ? (path.source === 'base' ? 'Deleted code' : 'Changed code') : 'Called by'}
+                  </span>
+                  <SymbolLabel identifier={symbol} />
+                </li>
+              ))}
+            </ol>
           </div>
         )}
       />
