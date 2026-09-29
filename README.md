@@ -2,6 +2,8 @@
 
 ImpactLens analyzes Python code changes and shows what may be affected.
 
+Watch the [one-minute demo](https://youtu.be/YPQ5ZJKiNow) for a code change, a deleted function, and a documentation-only comparison.
+
 For a repeatable walkthrough, see [DEMO.md](DEMO.md).
 For small hand-reviewed examples and a known missed dependency, see [benchmarks/ACCURACY.md](benchmarks/ACCURACY.md).
 For the proposed Docker deployment and host checks, see [DEPLOYMENT.md](DEPLOYMENT.md).
