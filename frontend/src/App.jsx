@@ -192,7 +192,7 @@ function CallerPaths({ paths, hasDeletedCode }) {
           <PathCard path={group.paths[0]} />
           {group.paths.length > 1 && (
             <details className="more-results">
-              <summary>Show {group.paths.length - 1} more paths from this code</summary>
+              <summary>Show {group.paths.length - 1} more {group.paths.length === 2 ? 'path' : 'paths'} from this code</summary>
               {group.paths.slice(1).map((path, index) => (
                 <div className="extra-path" key={index}><PathCard path={path} /></div>
               ))}
@@ -223,7 +223,8 @@ export function Report({ report }) {
           <h2>Potential impact</h2>
         </div>
         <p className="commit-pair">
-          <code>{report.base_commit}</code> → <code>{report.target_commit}</code>
+          <span><span className="commit-label">Older</span> <code>{report.base_commit}</code></span>
+          <span><span className="commit-label">Newer</span> <code>{report.target_commit}</code></span>
         </p>
       </div>
       <div className="report-explainer">
@@ -338,19 +339,15 @@ export default function App() {
   return (
     <main className="page">
       <header className="site-header">
-        <div className="brand-mark">IL</div>
-        <div>
-          <strong>ImpactLens</strong>
-          <span className="brand-subtitle">Python change analysis</span>
-        </div>
+        <strong>ImpactLens</strong>
+        <span className="brand-subtitle">Python change analysis</span>
       </header>
 
       <div className="intro">
-        <p className="eyebrow">Compare two commits</p>
-        <h1>See what a code change might affect.</h1>
+        <h1>Compare Python changes</h1>
         <p>
-          Enter a public Python GitHub repository and two commits. ImpactLens follows
-          function calls to show related routes, tests, and the paths connecting them.
+          Compare two commits in a public GitHub repository to find changed Python code
+          and the routes, tests, and functions that may use it.
         </p>
       </div>
 
@@ -367,7 +364,7 @@ export default function App() {
         />
         <div className="commit-fields">
           <div>
-            <label htmlFor="base_commit">Base commit</label>
+            <label htmlFor="base_commit">Older commit (base)</label>
             <input
               id="base_commit"
               name="base_commit"
@@ -378,7 +375,7 @@ export default function App() {
             />
           </div>
           <div>
-            <label htmlFor="target_commit">Target commit</label>
+            <label htmlFor="target_commit">Newer commit (target)</label>
             <input
               id="target_commit"
               name="target_commit"
