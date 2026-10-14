@@ -115,6 +115,8 @@ npm run dev
 
 Open the local URL printed by Vite. The frontend sends analysis requests to the API through the development proxy.
 
+Results open in Map view when Python code changed. Select a change, then a caller to highlight a reported connection and inspect its details. Deleted code uses an older-version map. Large maps show a limited set of code items with expansion controls; Report view keeps the full reported paths available. On narrow screens, the map becomes a selectable relationship list.
+
 To preview the built app with one server, build the frontend with `npm run build`, then run `python -m uvicorn web:create_app --factory --workers 1` from the project folder. Open `http://127.0.0.1:8000`. The built frontend and API share the same address; this command reports a clear error if the frontend has not been built. Keep one worker until a deployment host and shared capacity limit are chosen.
 
 ## Main files

@@ -23,14 +23,14 @@ function makeReport(overrides = {}) {
   }
 }
 
-async function render(report) {
+async function render(report, initialView = 'report') {
   const server = await createServer({
     server: { middlewareMode: true, hmr: false },
     appType: 'custom',
   })
   try {
     const { Report } = await server.ssrLoadModule('/src/App.jsx')
-    return renderToStaticMarkup(createElement(Report, { report }))
+    return renderToStaticMarkup(createElement(Report, { report, initialView }))
   } finally {
     await server.close()
   }
@@ -156,4 +156,24 @@ test('gives a concise result when only non-Python files changed', async () => {
   assert.match(html, /Documentation and other non-Python files are outside this analysis/)
   assert.doesNotMatch(html, /Possible effects in the newer version/)
   assert.doesNotMatch(html, /Possible caller paths/)
+})
+
+test('keeps incomplete-analysis evidence visible before the map and provides the Report view', async () => {
+  const html = await render(makeReport({
+    changed_symbols: [{ id: 'service.py::changed', changed_lines: [2] }],
+    evidence_paths: [{ source: 'target', symbols: ['service.py::changed', 'api.py::caller'] }],
+    analysis_errors: [{ source: 'target', path: 'broken.py', error: 'Invalid syntax' }],
+  }), 'map')
+  assert.match(html, /Results may be incomplete/)
+  assert.match(html, /broken.py/)
+  assert.ok(html.indexOf('Results may be incomplete') < html.indexOf('aria-label="Impact map"'))
+  assert.match(html, /aria-pressed="false">Report<\/button>/)
+  assert.match(html, /Showing 2 of 2 resolved code items/)
+})
+
+test('does not offer an empty map for a documentation-only comparison', async () => {
+  const html = await render(makeReport(), 'map')
+  assert.match(html, /No Python functions or classes changed/)
+  assert.doesNotMatch(html, /aria-label="Impact map"/)
+  assert.doesNotMatch(html, /aria-label="Result view"/)
 })

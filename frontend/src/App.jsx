@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { requestAnalysis } from './api.js'
+import ImpactMap from './ImpactMap.jsx'
 
 const initialForm = {
   repository: '',
@@ -204,7 +205,8 @@ function CallerPaths({ paths, hasDeletedCode }) {
   )
 }
 
-export function Report({ report }) {
+export function Report({ report, initialView = 'report' }) {
+  const [view, setView] = useState(initialView)
   const hasChanges = report.changed_symbols.length > 0
   const targetChangedIds = new Set(report.changed_symbols
     .filter((symbol) => symbol.change_type !== 'deleted')
@@ -230,17 +232,34 @@ export function Report({ report }) {
       <div className="report-explainer">
         <p>
           <strong>{hasChanges
-            ? `${report.changed_symbols.length} Python functions or classes changed.`
+            ? (report.changed_symbols.length === 1 ? '1 Python function or class changed.' : `${report.changed_symbols.length} Python functions or classes changed.`)
             : 'No Python functions or classes changed.'}</strong>{' '}
           {hasChanges
-            ? 'The groups below show the changed code and possible callers.'
+            ? (view === 'map' ? 'Select a change to explore what may use it.' : 'The groups below show the changed code and possible callers.')
             : 'There is no Python code change for ImpactLens to trace in this comparison.'}
         </p>
         <p>{hasChanges
           ? 'ImpactLens reads source code. A link suggests a dependency; it does not mean anything failed.'
           : 'Documentation and other non-Python files are outside this analysis.'}</p>
       </div>
-      {hasChanges && (
+      {report.analysis_errors?.length > 0 && (
+        <div className="analysis-notice">
+          <p className="caution">Some files could not be analyzed. Results may be incomplete.</p>
+          <Section
+            title="Files not analyzed"
+            items={report.analysis_errors}
+            renderItem={(item) => (
+              <><code>{item.path}</code><span className="detail">{item.source} version: {item.error}</span></>
+            )}
+          />
+        </div>
+      )}
+      {hasChanges && <div className="view-switch" role="group" aria-label="Result view">
+        <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')}>Map</button>
+        <button type="button" aria-pressed={view === 'report'} onClick={() => setView('report')}>Report</button>
+      </div>}
+      {hasChanges && view === 'map' && <ImpactMap report={report} />}
+      {hasChanges && view === 'report' && (
         <>
           <div className="changes-grid">
             <Section
@@ -285,21 +304,6 @@ export function Report({ report }) {
             </>
           )}
           <CallerPaths paths={displayPaths} hasDeletedCode={baseChangedIds.size > 0} />
-        </>
-      )}
-      {report.analysis_errors?.length > 0 && (
-        <>
-          <p className="caution">Some files could not be analyzed. Results may be incomplete.</p>
-          <Section
-            title="Files not analyzed"
-            items={report.analysis_errors}
-            renderItem={(item) => (
-              <>
-                <code>{item.path}</code>
-                <span className="detail">{item.source} version: {item.error}</span>
-              </>
-            )}
-          />
         </>
       )}
     </div>
@@ -392,7 +396,7 @@ export default function App() {
         {error && <p className="error" role="alert">{error}</p>}
       </form>
 
-      {report && <Report report={report} />}
+      {report && <Report report={report} initialView="map" />}
     </main>
   )
 }
