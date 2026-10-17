@@ -1,0 +1,71 @@
+1
+00:00:00,000 --> 00:00:02,200
+What could your Python change affect?
+
+2
+00:00:02,200 --> 00:00:04,800
+Compare two commits from a GitHub repository.
+
+3
+00:00:04,800 --> 00:00:06,000
+Loading pauses shortened.
+
+4
+00:00:06,000 --> 00:00:09,000
+Start with one changed function.
+
+5
+00:00:09,000 --> 00:00:13,000
+A test may call the changed health function.
+
+6
+00:00:13,000 --> 00:00:17,000
+Select the test to highlight its connection.
+
+7
+00:00:17,000 --> 00:00:24,000
+Inspect its file and version. ImpactLens has not run this test.
+
+8
+00:00:24,000 --> 00:00:28,500
+Choose another change to explore its callers.
+
+9
+00:00:28,500 --> 00:00:31,000
+Focus on one connection.
+
+10
+00:00:31,000 --> 00:00:34,000
+Bring other connections back into view.
+
+11
+00:00:34,000 --> 00:00:38,500
+Next, compare a change that deletes a function.
+
+12
+00:00:38,500 --> 00:00:43,000
+Deleted code uses connections from the older version.
+
+13
+00:00:43,000 --> 00:00:50,500
+Follow a focused path to the former POST /analyze route.
+
+14
+00:00:50,500 --> 00:00:57,000
+These are older-version dependencies. They may no longer exist.
+
+15
+00:00:57,000 --> 00:01:02,000
+Finally, compare a change that only adds the README.
+
+16
+00:01:02,000 --> 00:01:07,000
+No Python code changed, so there is no Python change to trace.
+
+17
+00:01:07,000 --> 00:01:11,000
+Dynamic calls can be missed. Review code and run tests.
+
+18
+00:01:11,000 --> 00:01:14,000
+Use the map to guide your review.
