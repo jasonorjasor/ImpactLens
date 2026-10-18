@@ -55,7 +55,7 @@ def test_deadline_is_not_treated_as_an_unreadable_source(monkeypatch, tmp_path):
         lambda *args: {"app.py": {"added_lines": {1}, "removed_lines": set()}},
     )
     monkeypatch.setattr(
-        git_analyzer, "python_file_changes", lambda *args: (set(), {})
+        git_analyzer, "python_file_changes", lambda *args: (set(), {}, set())
     )
 
     def expired(*args, **kwargs):

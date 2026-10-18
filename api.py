@@ -1,10 +1,11 @@
+import logging
 import threading
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from git_analyzer import AnalysisTimeoutError, analyze_change
+from git_analyzer import AnalysisGitError, AnalysisTimeoutError, analyze_change
 from repository_loader import (
     RepositoryLoadError,
     RepositoryTimeoutError,
@@ -15,6 +16,7 @@ from request_budget import RequestDeadlineExceeded, check_deadline, request_dead
 
 
 app = FastAPI(title="ImpactLens API")
+logger = logging.getLogger(__name__)
 MAX_CONCURRENT_ANALYSES = 2
 MAX_REQUEST_SECONDS = 120
 analysis_slots = threading.BoundedSemaphore(MAX_CONCURRENT_ANALYSES)
@@ -107,6 +109,12 @@ def analyze_repository_change(request: AnalyzeRequest):
             return report
     except (RepositoryTimeoutError, AnalysisTimeoutError, RequestDeadlineExceeded) as error:
         raise HTTPException(status_code=504, detail=str(error)) from error
+    except AnalysisGitError as error:
+        logger.error(
+            "Git failed during analysis: operation=%s exit_code=%s stderr=%s",
+            error.operation, error.returncode, error.diagnostic_stderr or "(empty)",
+        )
+        raise HTTPException(status_code=500, detail=str(error)) from error
     except RepositoryLoadError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     finally:

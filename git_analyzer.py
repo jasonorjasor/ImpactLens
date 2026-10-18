@@ -25,7 +25,25 @@ class AnalysisTimeoutError(RuntimeError):
     pass
 
 
+class AnalysisGitError(RuntimeError):
+    def __init__(self, operation, returncode=None, stderr=None, *, message=None):
+        super().__init__(message or (
+            "Git could not read the repository during analysis. "
+            "Try again. If it keeps failing, report the problem."
+        ))
+        self.operation = operation
+        self.returncode = returncode
+        detail = (stderr[:2000].decode("utf-8", errors="replace")
+                  if isinstance(stderr, bytes) else str(stderr or "")[:2000])
+        self.diagnostic_stderr = " ".join(
+            "".join(character if character.isprintable() else " " for character in detail).split()
+        )
+        if stderr and len(stderr) > 2000:
+            self.diagnostic_stderr += " [truncated]"
+
+
 def run_git(repository, *arguments, binary=False, input_data=None):
+    operation = arguments[0] if arguments else "unknown"
     try:
         result = run_git_command(
             ["git", "-C", str(repository), *arguments],
@@ -37,9 +55,13 @@ def run_git(repository, *arguments, binary=False, input_data=None):
     except subprocess.TimeoutExpired as error:
         check_deadline()
         raise AnalysisTimeoutError("Analysis Git command timed out") from error
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as error:
         check_deadline()
-        raise
+        raise AnalysisGitError(operation, error.returncode, error.stderr) from error
+    except OSError as error:
+        check_deadline()
+        message = "Git is required to analyze a repository." if isinstance(error, FileNotFoundError) else None
+        raise AnalysisGitError(operation, stderr=str(error), message=message) from error
     check_deadline()
     if binary:
         return result.stdout
@@ -65,6 +87,7 @@ def python_file_changes(repository, base_commit, target_commit=None):
     output = run_git(repository, *arguments, "--", "*.py")
     deleted = set()
     renamed = {}
+    added = set()
 
     for line in output.splitlines():
         parts = line.split("\t")
@@ -73,8 +96,10 @@ def python_file_changes(repository, base_commit, target_commit=None):
             renamed[parts[2]] = parts[1]
         elif status == "D" and len(parts) >= 2:
             deleted.add(parts[1])
+        elif status == "A" and len(parts) >= 2:
+            added.add(parts[1])
 
-    return deleted, renamed
+    return deleted, renamed, added
 
 
 def detect_untracked_renames(repository, base_commit, deleted, untracked):
@@ -86,11 +111,8 @@ def detect_untracked_renames(repository, base_commit, deleted, untracked):
             continue
 
         for old_path in sorted(deleted):
-            try:
-                old_source = run_git(repository, "show", f"{base_commit}:{old_path}", binary=True)
-                old_source = old_source.replace(b"\r\n", b"\n")
-            except subprocess.CalledProcessError:
-                continue
+            old_source = run_git(repository, "show", f"{base_commit}:{old_path}", binary=True)
+            old_source = old_source.replace(b"\r\n", b"\n")
 
             similarity = difflib.SequenceMatcher(
                 None,
@@ -185,12 +207,16 @@ def changed_symbols(repository, base_commit, target_commit=None):
     changed_ranges = changed_python_line_ranges(repository, base_commit, target_commit)
     symbols = []
     untracked = untracked_python_files(repository) if target_commit is None else set()
-    deleted, renamed = python_file_changes(repository, base_commit, target_commit)
+    deleted, renamed, added = python_file_changes(repository, base_commit, target_commit)
     if target_commit is None:
         renamed.update(
             detect_untracked_renames(repository, base_commit, deleted, untracked)
         )
     renamed_sources = set(renamed.values())
+    unmatched_untracked = untracked - set(renamed)
+    base_paths = set(run_git(
+        repository, "ls-tree", "-r", "--name-only", "-z", base_commit, "--",
+    ).split("\0")) if unmatched_untracked else set()
 
     for path, ranges in changed_ranges.items():
         check_deadline()
@@ -205,7 +231,7 @@ def changed_symbols(repository, base_commit, target_commit=None):
                 source = (repository / path).read_bytes()
             else:
                 source = run_git(repository, "show", f"{target_commit}:{path}", binary=True)
-        except (OSError, subprocess.CalledProcessError):
+        except OSError:
             continue
 
         try:
@@ -218,10 +244,10 @@ def changed_symbols(repository, base_commit, target_commit=None):
             continue
 
         previous_path = renamed.get(path, path)
-        try:
-            old_source = run_git(repository, "show", f"{base_commit}:{previous_path}", binary=True)
-        except subprocess.CalledProcessError:
+        if path in added or (path in unmatched_untracked and path not in base_paths):
             old_source = b""
+        else:
+            old_source = run_git(repository, "show", f"{base_commit}:{previous_path}", binary=True)
         try:
             old_symbols = {
                 symbol["qualname"]: symbol
