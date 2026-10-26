@@ -10,6 +10,7 @@ from repository_loader import (
     RepositoryLoadError,
     RepositoryTimeoutError,
     is_github_url,
+    normalize_github_url,
     open_repository,
 )
 from request_budget import RequestDeadlineExceeded, check_deadline, request_deadline
@@ -68,7 +69,40 @@ class AnalysisError(APIModel):
     error: str
 
 
+class ResolvedCommits(APIModel):
+    base: str
+    target: str | None
+
+
+class SymbolLocation(APIModel):
+    source: Literal["base", "target"]
+    id: str
+    path: str
+    qualname: str
+    line_start: int = Field(ge=1)
+    line_end: int = Field(ge=1)
+
+
+class CallSite(APIModel):
+    source: Literal["base", "target"]
+    caller_id: str
+    callee_id: str
+    path: str
+    line: int = Field(ge=1)
+    line_end: int = Field(ge=1)
+    column: int = Field(ge=0)
+    expression: str
+    resolution: Literal["local", "import"]
+    code: str
+    code_truncated: bool
+
+
 class AnalyzeResponse(ImpactSummary):
+    schema_version: Literal[2]
+    resolved_commits: ResolvedCommits
+    symbol_locations: list[SymbolLocation]
+    call_sites: list[CallSite]
+    repository_url: str | None = None
     base_commit: str
     target_commit: str
     changed_symbols: list[ChangedSymbol]
@@ -105,6 +139,7 @@ def analyze_repository_change(request: AnalyzeRequest):
                     request.base_commit,
                     request.target_commit,
                 )
+                report["repository_url"] = normalize_github_url(request.repository).removesuffix(".git")
             check_deadline()
             return report
     except (RepositoryTimeoutError, AnalysisTimeoutError, RequestDeadlineExceeded) as error:

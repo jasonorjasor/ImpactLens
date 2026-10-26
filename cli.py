@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from git_analyzer import AnalysisGitError, AnalysisTimeoutError, analyze_change, analyze_working_tree
-from repository_loader import RepositoryLoadError, is_github_url, open_repository
+from repository_loader import RepositoryLoadError, is_github_url, normalize_github_url, open_repository
 
 
 def is_test_identifier(identifier):
@@ -106,6 +106,19 @@ def format_report(report, max_paths=20):
         remaining = len(paths) - len(visible_paths)
         lines.append(f"- {remaining} more paths (use --all-paths)")
 
+    sites = report.get("call_sites", [])
+    if sites:
+        lines.extend(["", f"Call-site evidence ({len(sites)})"])
+        for site in sites if max_paths is None else sites[:max_paths]:
+            commit = report["resolved_commits"][site["source"]] or "WORKING_TREE"
+            lines.append(
+                f"- [{site['source']} {commit}] {site['caller_id']} calls {site['callee_id']} "
+                f"at {site['path']}:{site['line']} (column {site['column']}; {site['resolution']} match)"
+            )
+            lines.append(f"  {site['code']}{' …' if site['code_truncated'] else ''}")
+        if max_paths is not None and len(sites) > max_paths:
+            lines.append(f"- {len(sites) - max_paths} more call sites (use --all-paths)")
+
     errors = report["analysis_errors"]
     if errors:
         lines.extend(["", f"Files not analyzed ({len(errors)})"])
@@ -183,6 +196,8 @@ def main(arguments=None):
     except (RepositoryLoadError, AnalysisTimeoutError, AnalysisGitError) as error:
         parser.error(str(error))
 
+    if is_github_url(args.repository):
+        report["repository_url"] = normalize_github_url(args.repository).removesuffix(".git")
     if args.json:
         print(json.dumps(report, indent=2))
     else:

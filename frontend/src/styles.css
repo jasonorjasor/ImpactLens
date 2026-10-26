@@ -163,6 +163,16 @@ select:focus-visible { outline: 2px solid #245fc7; outline-offset: 3px; }
 .map-mobile-list { display: none; }
 .map-mobile-help { display: none; }
 
+.source-evidence { margin-top: 20px; padding-top: 18px; border-top: 1px solid #dedede; font-size: 14px; }
+.source-evidence p { margin: 8px 0; color: #444; overflow-wrap: anywhere; }
+.source-evidence a { color: #174a9c; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.call-evidence-list { padding-left: 22px; }
+.call-evidence-step { padding: 4px 0 12px; }
+.call-site-list { list-style: none; padding: 0; }
+.call-site-list > li { margin-top: 10px; }
+.call-site-list pre { margin: 8px 0; padding: 10px 12px; background: #f5f5f5; border: 1px solid #e0e0e0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.call-site-list p { font-size: 13px; }
+
 @media (max-width: 760px) {
   .impact-map { display: block; }
   .map-root-list, .map-scroll { display: none; }

@@ -10,6 +10,25 @@ export function nodeKey(source, identifier) {
   return JSON.stringify([source, identifier])
 }
 
+export function sourceLink(report, source, path, start, end = start) {
+  const commit = report.resolved_commits?.[source]
+  if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit || '') || !Number.isInteger(start) || start < 1 || !Number.isInteger(end) || end < start) return null
+  let repository
+  try { repository = new URL(report.repository_url) } catch { return null }
+  if (repository.protocol !== 'https:' || repository.host !== 'github.com' || repository.username || repository.password || repository.search || repository.hash || !/^\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/?$/.test(repository.pathname)) return null
+  const parts = path.split('/')
+  if (parts.some((part) => !part || part === '.' || part === '..')) return null
+  const root = repository.pathname.replace(/\/$/, '').replace(/\.git$/, '')
+  return `https://github.com${root}/blob/${commit}/${parts.map(encodeURIComponent).join('/')}#L${start}${end > start ? `-L${end}` : ''}`
+}
+
+export function connectionEvidence(report, source, identifiers) {
+  return identifiers.slice(1).map((caller, index) => ({
+    caller, callee: identifiers[index],
+    sites: (report.call_sites || []).filter((site) => site.source === source && site.caller_id === caller && site.callee_id === identifiers[index]),
+  }))
+}
+
 export function changedRoots(report) {
   return report.changed_symbols.map((symbol) => {
     const source = symbol.change_type === 'deleted' ? 'base' : 'target'

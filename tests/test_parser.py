@@ -38,7 +38,8 @@ def login():
     result = extract_calls(source)
 
     assert result == [
-        {"caller": "login", "callee": "verify_user", "line": 3}
+        {"caller": "login", "callee": "verify_user", "line": 3,
+         "line_end": 3, "column": 11, "expression": "verify_user"}
     ]
 
 
@@ -61,5 +62,20 @@ class User:
         "User.verify_user",
     ]
     assert calls == [
-        {"caller": "User.login", "callee": "User.verify_user", "line": 4}
+        {"caller": "User.login", "callee": "User.verify_user", "line": 4,
+         "line_end": 4, "column": 15, "expression": "self.verify_user"}
     ]
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_call_preview_uses_python_lines_and_discloses_clipping(newline):
+    source = newline.join([
+        'label = "before\u2028after"',
+        'def run():',
+        '    return work("' + 'x' * 300 + '")',
+    ])
+    call = analyze_sources({"caller.py": source})["files"][0]["calls"][0]
+    assert call["line"] == 3
+    assert call["code"].startswith('return work("')
+    assert len(call["code"]) == 240
+    assert call["code_truncated"] is True

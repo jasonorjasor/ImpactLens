@@ -388,11 +388,54 @@ def summarize_impact(report, changed_ids, affected_symbols):
     }
 
 
+def resolve_commit(repository, revision):
+    commit = run_git(repository, "rev-parse", "--verify", "--end-of-options", f"{revision}^{{commit}}").strip()
+    if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit):
+        raise ValueError("Git returned an invalid commit ID")
+    return commit
+
+
+def source_evidence(reports, paths, changed):
+    edges = set()
+    identifiers = {
+        ("base" if symbol.get("change_type") == "deleted" else "target", symbol["id"])
+        for symbol in changed
+    }
+    for path in paths:
+        symbols = [identifier.removesuffix(" (cycle)") for identifier in path["symbols"]]
+        identifiers.update((path["source"], identifier) for identifier in symbols)
+        edges.update((path["source"], caller, callee) for callee, caller in zip(symbols, symbols[1:]))
+
+    locations = []
+    sites = []
+    for source, report in reports.items():
+        for file in report["files"]:
+            check_deadline()
+            for symbol in file["symbols"]:
+                if (source, symbol["id"]) in identifiers:
+                    locations.append({
+                        "source": source, "id": symbol["id"], "path": symbol["path"],
+                        "qualname": symbol["qualname"], "line_start": symbol["line_start"],
+                        "line_end": symbol["line_end"],
+                    })
+            for call in file["calls"]:
+                if (source, call["caller_id"], call["callee_id"]) in edges:
+                    sites.append({"source": source, **{
+                        key: call[key] for key in (
+                            "caller_id", "callee_id", "path", "line", "line_end", "column",
+                            "expression", "resolution", "code", "code_truncated",
+                        )
+                    }})
+    return locations, sites
+
+
 def analyze_change(repository, base_commit, target_commit=None):
-    changed = changed_symbols(repository, base_commit, target_commit)
-    reports = {"target": analyze_commit(repository, target_commit)}
+    resolved_base = resolve_commit(repository, base_commit)
+    resolved_target = resolve_commit(repository, target_commit) if target_commit is not None else None
+    changed = changed_symbols(repository, resolved_base, resolved_target)
+    reports = {"target": analyze_commit(repository, resolved_target)}
     if any(symbol.get("change_type") == "deleted" for symbol in changed):
-        reports["base"] = analyze_commit(repository, base_commit)
+        reports["base"] = analyze_commit(repository, resolved_base)
     graphs = {
         source: build_reverse_graph([
             call for file in report["files"] for call in file["calls"]
@@ -421,7 +464,12 @@ def analyze_change(repository, base_commit, target_commit=None):
                 if identifier not in affected[source]:
                     affected[source].append(identifier)
 
+    locations, sites = source_evidence(reports, evidence_paths, changed)
     return {
+        "schema_version": 2,
+        "resolved_commits": {"base": resolved_base, "target": resolved_target},
+        "symbol_locations": locations,
+        "call_sites": sites,
         "base_commit": base_commit,
         "target_commit": target_commit or "WORKING_TREE",
         "changed_symbols": changed,

@@ -41,8 +41,12 @@ class SymbolVisitor(ast.NodeVisitor):
         self._visit_symbol(node, "async_function")
 
 
+def _syntax_tree(source):
+    return source if isinstance(source, ast.AST) else ast.parse(source)
+
+
 def extract_symbols(source):
-    tree = ast.parse(source)
+    tree = _syntax_tree(source)
     visitor = SymbolVisitor()
     visitor.visit(tree)
     return visitor.symbols
@@ -95,7 +99,8 @@ class CallVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node):
         if isinstance(node.func, (ast.Name, ast.Attribute)):
-            callee = ast.unparse(node.func)
+            expression = ast.unparse(node.func)
+            callee = expression
             if (
                 isinstance(node.func, ast.Attribute)
                 and isinstance(node.func.value, ast.Name)
@@ -109,6 +114,9 @@ class CallVisitor(ast.NodeVisitor):
                     "caller": self.current_function,
                     "callee": callee,
                     "line": node.lineno,
+                    "line_end": node.end_lineno,
+                    "column": node.col_offset,
+                    "expression": expression,
                 }
             )
 
@@ -116,14 +124,14 @@ class CallVisitor(ast.NodeVisitor):
 
 
 def extract_calls(source):
-    tree = ast.parse(source)
+    tree = _syntax_tree(source)
     visitor = CallVisitor()
     visitor.visit(tree)
     return visitor.calls
 
 
 def extract_imports(source):
-    tree = ast.parse(source)
+    tree = _syntax_tree(source)
     imports = []
 
     for node in ast.walk(tree):
@@ -198,7 +206,7 @@ class RouteVisitor(ast.NodeVisitor):
 
 
 def extract_routes(source):
-    tree = ast.parse(source)
+    tree = _syntax_tree(source)
     visitor = RouteVisitor()
     visitor.visit(tree)
     return visitor.routes
@@ -371,15 +379,16 @@ def analyze_sources(source_by_path):
         check_deadline()
         try:
             source = decode_python_source(source_by_path[relative_path])
-            symbols = extract_symbols(source)
+            tree = ast.parse(source)
+            symbols = extract_symbols(tree)
             functions = [
                 symbol
                 for symbol in symbols
                 if symbol["kind"] in {"function", "async_function"}
             ]
-            calls = extract_calls(source)
-            imports = extract_imports(source)
-            routes = extract_routes(source)
+            calls = extract_calls(tree)
+            imports = extract_imports(tree)
+            routes = extract_routes(tree)
         except (SyntaxError, UnicodeDecodeError) as error:
             errors.append({"path": relative_path, "error": str(error)})
             continue
@@ -387,8 +396,12 @@ def analyze_sources(source_by_path):
         for symbol in symbols:
             symbol["path"] = relative_path
             symbol["id"] = f"{relative_path}::{symbol['qualname']}"
+        source_lines = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
         for call in calls:
             call["path"] = relative_path
+            line = source_lines[call["line"] - 1].strip()
+            call["code"] = line[:240]
+            call["code_truncated"] = len(line) > 240
             call["caller_id"] = (
                 f"{relative_path}::{call['caller']}"
                 if call["caller"] is not None

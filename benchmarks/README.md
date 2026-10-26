@@ -74,3 +74,25 @@ After this change, the pinned ImpactLens API comparison returned two identical 2
 Temporary public checkouts now have a size watcher while Git commands run, including Git blob reads during analysis. If the checkout exceeds 100 MiB, the watcher stops Git and its descendants. The existing checks after loading stages and analysis remain. The watcher samples about every 100 ms, so disk use can briefly exceed the threshold, and the amount downloaded over the network is not bounded by this size check. Local-path analyses are unaffected.
 
 On September 23, the pinned ImpactLens, Requests, and pytest comparisons kept their full report hashes (`a18e17902cd4`, `67dac84aa64a`, and `f818ed26e66e`) with zero analysis errors. Their total times were 11.108, 12.832, and 23.137 seconds. A two-request AutoGen API run returned two 200 responses with the same full report hash (`e4cd41e1f162`), 32.684 seconds wall time, and 334.5 MB sampled peak summed RSS. These single runs check report stability and live API behavior, not a speed or deployment-capacity improvement. A local test forces a growing checkout over a small limit and confirms the child writer stops.
+
+## Source-evidence check
+
+On October 26, 2026, the three pinned comparisons above and the deletion pair in
+`DEMO.md` were checked before and after adding schema 2 source evidence and sharing
+one parsed syntax tree per file. Full hashes of the existing report fields were
+identical in each comparison. Whole-report hashes change because schema 2 adds
+resolved commits, definition locations, and call sites.
+
+| Comparison | Changed / paths / errors | Call sites | Definition locations | Analysis before / after |
+| --- | --- | ---: | ---: | ---: |
+| ImpactLens | 7 / 3 / 0 | 3 | 7 | 8.092 / 9.479 s |
+| Requests | 2 / 7 / 0 | 7 | 9 | 8.868 / 10.254 s |
+| pytest | 2 / 0 / 0 | 0 | 2 | 44.342 / 41.147 s |
+| ImpactLens deletion | 17 / 121 / 0 | 60 | 46 | 7.983 / 8.149 s |
+
+Every returned definition and call-site range was checked against its Git source;
+call previews matched the specified first source line. These are single Windows /
+Python 3.14 observations with variable network fetching and machine load, including
+other verification work. They do not establish a speedup or a precise slowdown.
+Sharing syntax trees removes repeated parsing; source evidence and two commit-ID
+lookups add work and increase report size. Capacity limits remain unchanged.

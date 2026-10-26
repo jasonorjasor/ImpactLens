@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildImpactGraph, changedRoots, connectionPaths, graphView, initialRoot, nodeKey } from '../src/impactGraph.js'
+import { buildImpactGraph, changedRoots, connectionEvidence, connectionPaths, graphView, initialRoot, nodeKey, sourceLink } from '../src/impactGraph.js'
 
 function report(overrides = {}) {
   return {
@@ -12,6 +12,28 @@ function report(overrides = {}) {
 }
 
 function graph(data) { return buildImpactGraph(data, changedRoots(data)[0]) }
+
+test('source links pin the correct snapshot and safely encode paths', () => {
+  const data = { repository_url: 'https://github.com/owner/repo.git', resolved_commits: { base: 'a'.repeat(40), target: 'b'.repeat(40) } }
+  assert.equal(sourceLink(data, 'base', 'folder/a #?.py', 3, 5), `https://github.com/owner/repo/blob/${'a'.repeat(40)}/folder/a%20%23%3F.py#L3-L5`)
+  assert.ok(sourceLink(data, 'target', 'caller.py', 2).includes('b'.repeat(40)))
+  for (const repository_url of ['javascript:alert(1)', 'https://evil.com/o/r', 'https://github.com@evil.com/o/r', 'https://github.com/o/r?token=x']) {
+    assert.equal(sourceLink({ ...data, repository_url }, 'base', 'caller.py', 1), null)
+  }
+  assert.equal(sourceLink(data, 'base', '../caller.py', 1), null)
+  assert.equal(sourceLink(data, 'base', 'caller.py', 0), null)
+  assert.equal(sourceLink({ ...data, resolved_commits: { target: null } }, 'target', 'caller.py', 1), null)
+})
+
+test('connection evidence preserves direction, source and repeated call sites', () => {
+  const sites = [
+    { source: 'base', caller_id: 'c.py::run', callee_id: 's.py::work', line: 3, column: 2 },
+    { source: 'base', caller_id: 'c.py::run', callee_id: 's.py::work', line: 3, column: 10 },
+    { source: 'target', caller_id: 'c.py::run', callee_id: 's.py::work', line: 9 },
+    { source: 'base', caller_id: 's.py::work', callee_id: 'c.py::run', line: 1 },
+  ]
+  assert.deepEqual(connectionEvidence({ call_sites: sites }, 'base', ['s.py::work', 'c.py::run']), [{ caller: 'c.py::run', callee: 's.py::work', sites: sites.slice(0, 2) }])
+})
 
 test('merges shared connections while preserving reported path alternatives and input', () => {
   const data = report({

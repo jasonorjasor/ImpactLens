@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { requestAnalysis } from './api.js'
 import ImpactMap from './ImpactMap.jsx'
+import { symbolLabel } from './impactGraph.js'
 
 const initialForm = {
   repository: '',
@@ -16,11 +17,11 @@ function isTestIdentifier(identifier) {
 }
 
 function SymbolLabel({ identifier }) {
-  const [file, ...name] = identifier.split('::')
+  const { file, name } = symbolLabel(identifier)
   return (
     <span className="symbol-label">
-      <code className="symbol-name">{name.join('::') || file}</code>
-      {name.length > 0 && <span className="symbol-file">in <code>{file}</code></span>}
+      <code className="symbol-name">{name}</code>
+      {identifier.includes('::') && <span className="symbol-file">in <code>{file}</code></span>}
     </span>
   )
 }
@@ -232,15 +233,15 @@ export function Report({ report, initialView = 'report' }) {
       <div className="report-explainer">
         <p>
           <strong>{hasChanges
-            ? (report.changed_symbols.length === 1 ? '1 Python function or class changed.' : `${report.changed_symbols.length} Python functions or classes changed.`)
-            : 'No Python functions or classes changed.'}</strong>{' '}
+            ? (report.changed_symbols.length === 1 ? '1 changed Python function or method detected.' : `${report.changed_symbols.length} changed Python functions or methods detected.`)
+            : 'No changed Python functions or methods detected.'}</strong>{' '}
           {hasChanges
             ? (view === 'map' ? 'Select a change to explore what may use it.' : 'The groups below show the changed code and possible callers.')
-            : 'There is no Python code change for ImpactLens to trace in this comparison.'}
+            : 'Other changes may still need review.'}
         </p>
         <p>{hasChanges
           ? 'ImpactLens reads source code. A link suggests a dependency; it does not mean anything failed.'
-          : 'Documentation and other non-Python files are outside this analysis.'}</p>
+          : 'Class attributes, module-level code, documentation, and non-Python files can change without appearing here.'}</p>
       </div>
       {report.analysis_errors?.length > 0 && (
         <div className="analysis-notice">
@@ -265,7 +266,7 @@ export function Report({ report, initialView = 'report' }) {
             <Section
               className="changes-section"
               title="Changes in this comparison"
-              description="Functions, classes, and tests whose Python code differs between the two versions."
+              description="Functions and methods, including tests, whose Python code differs between the two versions."
               items={report.changed_symbols}
               renderItem={(symbol) => (
                 <>

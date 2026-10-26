@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { createServer } from 'vite'
+import { renderComponent } from './renderComponent.js'
 
 function makeReport(overrides = {}) {
   return {
@@ -24,16 +22,7 @@ function makeReport(overrides = {}) {
 }
 
 async function render(report, initialView = 'report') {
-  const server = await createServer({
-    server: { middlewareMode: true, hmr: false },
-    appType: 'custom',
-  })
-  try {
-    const { Report } = await server.ssrLoadModule('/src/App.jsx')
-    return renderToStaticMarkup(createElement(Report, { report, initialView }))
-  } finally {
-    await server.close()
-  }
+  return renderComponent('/src/App.jsx', 'Report', { report, initialView })
 }
 
 test('distinguishes direct changes from reached routes and tests', async () => {
@@ -152,8 +141,8 @@ test('keeps additional tests available without making the report too long', asyn
 test('gives a concise result when only non-Python files changed', async () => {
   const html = await render(makeReport())
 
-  assert.match(html, /No Python functions or classes changed/)
-  assert.match(html, /Documentation and other non-Python files are outside this analysis/)
+  assert.match(html, /No changed Python functions or methods detected/)
+  assert.match(html, /Class attributes, module-level code, documentation, and non-Python files can change without appearing here/)
   assert.doesNotMatch(html, /Possible effects in the newer version/)
   assert.doesNotMatch(html, /Possible caller paths/)
 })
@@ -173,7 +162,7 @@ test('keeps incomplete-analysis evidence visible before the map and provides the
 
 test('does not offer an empty map for a documentation-only comparison', async () => {
   const html = await render(makeReport(), 'map')
-  assert.match(html, /No Python functions or classes changed/)
+  assert.match(html, /No changed Python functions or methods detected/)
   assert.doesNotMatch(html, /aria-label="Impact map"/)
   assert.doesNotMatch(html, /aria-label="Result view"/)
 })

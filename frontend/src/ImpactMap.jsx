@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import SourceEvidence from './SourceEvidence.jsx'
 import {
   buildImpactGraph, changedRoots, connectionPaths, graphView, initialRoot,
   INITIAL_NODE_LIMIT, MAX_NODE_LIMIT,
@@ -230,6 +231,8 @@ function RootMap({ report, root }) {
             </ol>
           </details>}
         </>}
+        <SourceEvidence report={report} source={root.source} identifier={node.id}
+          identifiers={pathNodes.map((key) => graph.nodes.find((item) => item.key === key).id)} />
         {node.change && (node.change.changed_lines?.length > 0 || node.change.removed_lines?.length > 0) &&
           <details className="line-details"><summary>Show changed line numbers</summary>
             {node.change.changed_lines?.length > 0 && <p>Newer version: {node.change.changed_lines.join(', ')}</p>}

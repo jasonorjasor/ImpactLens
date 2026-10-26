@@ -2,9 +2,11 @@
 
 ImpactLens analyzes Python code changes and shows what may be affected.
 
-[![ImpactLens visual map demo](docs/demo/impact-map-demo.jpg)](docs/demo/ImpactLens-Map-Demo.mp4)
+[![Watch the ImpactLens visual map demo on YouTube](docs/demo/impact-map-demo.jpg)](https://www.youtube.com/watch?v=Vh1nYdAHHyE)
 
-Watch or download the [74-second visual map demo](docs/demo/ImpactLens-Map-Demo.mp4): explore changed code, highlight a test connection, inspect former callers after deletion, and compare a documentation-only change. [Captions](docs/demo/ImpactLens-Map-Demo.srt) are also available.
+Watch the [74-second visual map demo on YouTube](https://www.youtube.com/watch?v=Vh1nYdAHHyE) without downloading: explore changed code, highlight a test connection, inspect former callers after deletion, and compare a documentation-only change.
+
+[Download the MP4](docs/demo/ImpactLens-Map-Demo.mp4) · [Caption file](docs/demo/ImpactLens-Map-Demo.srt)
 
 The walkthrough uses actual local-app captures, with loading pauses shortened.
 
@@ -17,13 +19,15 @@ It currently:
 - finds Python functions and classes
 - tracks function calls across files
 - resolves many local and imported calls
-- maps changed lines between two Git commits
+- maps changed lines to Python functions and methods between two Git commits
 - identifies affected FastAPI routes and pytest tests
 - shows dependency paths from changed code to callers
 
 ## Limitations
 
 ImpactLens reads Python source without executing it. A reported path is a possible dependency, not proof of a failure. An empty report does not prove a change is safe.
+
+Change detection focuses on functions and methods. Classes are parsed for structure, but class attributes and module-level code can change without producing a changed-function result.
 
 Dynamic calls such as `getattr`, runtime-selected callbacks, monkey-patching, and generated code can be missed. Import and method resolution uses source-level rules rather than a full type system, so ambiguous calls may be unresolved or matched imperfectly. The analyzer does not run tests or analyze JavaScript, configuration, database changes, or external services. Parse errors are included in the report and indicate incomplete analysis.
 
@@ -93,6 +97,8 @@ The top-level affected symbols, routes, and tests use target-version evidence. `
 `changed_lines` refers to the target version; `removed_lines` refers to the base version. Deleted functions' start and end lines refer to the base version.
 If a Python file cannot be parsed, `analysis_errors` names the file and version. The report may be incomplete.
 
+Reports use `schema_version: 2`. `resolved_commits` pins the analyzed snapshots; `symbol_locations` and `call_sites` preserve versioned definitions and call-site evidence for reported connections. See [the report schema](docs/REPORT_SCHEMA.md) for fields and compatibility notes.
+
 ## Run the API
 
 Start the development server:
@@ -121,6 +127,8 @@ npm run dev
 Open the local URL printed by Vite. The frontend sends analysis requests to the API through the development proxy.
 
 Results open in Map view when Python code changed. Select a change, then a caller to highlight a reported connection and inspect its details. Deleted code uses an older-version map. Large maps show a limited set of code items with expansion controls; Report view keeps the full reported paths available. On narrow screens, the map becomes a selectable relationship list.
+
+The selected item's **Why this connection?** section shows call lines and how names were matched. Public GitHub analyses link to source at the exact analyzed commit. Local working-tree results show file locations without claiming a committed target snapshot.
 
 To preview the built app with one server, build the frontend with `npm run build`, then run `python -m uvicorn web:create_app --factory --workers 1` from the project folder. Open `http://127.0.0.1:8000`. The built frontend and API share the same address; this command reports a clear error if the frontend has not been built. Keep one worker until a deployment host and shared capacity limit are chosen.
 
