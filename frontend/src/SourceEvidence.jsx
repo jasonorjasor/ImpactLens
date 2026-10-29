@@ -15,13 +15,14 @@ function CallStep({ report, source, step }) {
           {site.path}:{site.line}{site.line_end > site.line ? `–${site.line_end}` : ''}
         </SourceLocation>
         <pre><code>{site.code}{site.code_truncated ? ' …' : ''}</code></pre>
+        {site.relationship === 'fastapi_dependency' && <p>Declared with Depends(): FastAPI supplies this dependency when handling a request. This is not a direct call in the function body.</p>}
         <p>{site.resolution === 'import' ? 'Matched through an imported name.' : 'Matched by a name in the same file.'}</p>
       </li>
     )
   }
   return (
     <li className="call-evidence-step">
-      <p><code>{symbolLabel(step.caller).name}</code> calls <code>{symbolLabel(step.callee).name}</code></p>
+      <p><code>{symbolLabel(step.caller).name}</code> {step.sites.some((site) => site.relationship === 'fastapi_dependency') ? 'depends on' : 'calls'} <code>{symbolLabel(step.callee).name}</code></p>
       {step.sites.length === 0
         ? <p>Call-site evidence is unavailable for this step.</p>
         : <>
@@ -36,7 +37,7 @@ function CallStep({ report, source, step }) {
 }
 
 export default function SourceEvidence({ report, source, identifier, identifiers = [] }) {
-  if (report.schema_version !== 2) return <p className="map-note">Source evidence is unavailable in this older report. Run the comparison again to inspect call sites.</p>
+  if (![2, 3].includes(report.schema_version)) return <p className="map-note">Source evidence is unavailable in this older report. Run the comparison again to inspect call sites.</p>
   const locations = report.symbol_locations.filter((item) => item.source === source && item.id === identifier)
   const steps = connectionEvidence(report, source, identifiers)
   const commit = report.resolved_commits[source]
@@ -53,7 +54,7 @@ export default function SourceEvidence({ report, source, identifier, identifiers
       {steps.length === 0
         ? <p>Select a caller to see the source lines behind its connection.</p>
         : <>
-          <p>Each step below names the caller first. Matches use source-level rules and can be imperfect.</p>
+          <p>Each step below names the code using a dependency first. Matches use source-level rules and can be imperfect.</p>
           <ol className="call-evidence-list">{steps.slice(0, 4).map((step, index) => <CallStep key={index} report={report} source={source} step={step} />)}</ol>
           {steps.length > 4 && <details className="more-results">
             <summary>Show the remaining {steps.length - 4} connection steps</summary>

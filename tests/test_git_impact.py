@@ -107,7 +107,7 @@ def test_builds_impact_report_from_two_commits(tmp_path):
         {
             "symbol_id": "routes.py::login_route",
             "method": "POST",
-            "path": "/api/login",
+            "path": "/api/login", "registration": "declared",
         }
     ]
     assert report["related_tests"] == ["tests/test_login.py::test_login_route"]
@@ -190,7 +190,7 @@ def test_deleted_functions_use_historical_dependencies(deletion_repository, mode
     assert report["historical_impact"] == {
         "affected_symbols": evidence["symbols"][1:],
         "affected_routes": [{
-            "symbol_id": "routes.py::login_route", "method": "POST", "path": "/login",
+            "symbol_id": "routes.py::login_route", "method": "POST", "path": "/login", "registration": "declared",
         }],
         "related_tests": ["tests/test_login.py::test_login"],
     }
@@ -277,7 +277,7 @@ def test_deleted_route_without_callers_is_still_historical(deletion_repository):
     repository, _ = deletion_repository
     route = repository / "isolated.py"
     route.write_text(
-        "@router.get('/isolated')\ndef isolated():\n    return True\n",
+        "from fastapi import FastAPI\nrouter = FastAPI()\n@router.get('/isolated')\ndef isolated():\n    return True\n",
         encoding="utf-8",
     )
     run_git(repository, "add", "isolated.py")
@@ -291,5 +291,5 @@ def test_deleted_route_without_callers_is_still_historical(deletion_repository):
     assert report["changed_symbols"][0]["impact_paths"] == []
     assert report["evidence_paths"] == []
     assert report["historical_impact"]["affected_routes"] == [{
-        "symbol_id": "isolated.py::isolated", "method": "GET", "path": "/isolated",
+        "symbol_id": "isolated.py::isolated", "method": "GET", "path": "/isolated", "registration": "registered",
     }]

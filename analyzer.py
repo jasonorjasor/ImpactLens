@@ -5,6 +5,7 @@ import io
 import tokenize
 from pathlib import Path
 
+from fastapi_analysis import apply_fastapi, declarations
 from request_budget import check_deadline
 
 
@@ -374,6 +375,7 @@ def _resolve_files(files):
 def analyze_sources(source_by_path):
     files = []
     errors = []
+    framework_facts = {}
 
     for relative_path in sorted(source_by_path):
         check_deadline()
@@ -388,7 +390,13 @@ def analyze_sources(source_by_path):
             ]
             calls = extract_calls(tree)
             imports = extract_imports(tree)
-            routes = extract_routes(tree)
+            framework_module = module_name(relative_path)
+            if relative_path.endswith("/__init__.py"):
+                framework_module += ".__init__"
+            facts = declarations(tree, framework_module, relative_path)
+            framework_facts[relative_path] = facts
+            calls.extend(facts["dependencies"])
+            routes = []
         except (SyntaxError, UnicodeDecodeError) as error:
             errors.append({"path": relative_path, "error": str(error)})
             continue
@@ -437,7 +445,9 @@ def analyze_sources(source_by_path):
             }
         )
 
-    return {"files": _resolve_files(files), "errors": errors}
+    _resolve_files(files)
+    warnings = apply_fastapi(files, framework_facts)
+    return {"files": files, "errors": errors, "warnings": warnings}
 
 
 def analyze_repository(root):

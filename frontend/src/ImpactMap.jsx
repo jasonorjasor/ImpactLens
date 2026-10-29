@@ -205,7 +205,7 @@ function RootMap({ report, root }) {
         <p>{node.isRoot
           ? (historical ? 'This code was deleted. The map shows its former callers.' : 'This code changed in the newer version. Select a caller to see how it connects.')
           : <>This code appears on a reported caller path from <code>{root.name}</code>.</>}</p>
-        {node.routes.map((route) => <p key={`${route.method} ${route.path}`}>Handles <code>{route.method} {route.path}</code>.</p>)}
+        {node.routes.map((route) => <p key={`${route.method} ${route.path}`}>{route.registration === 'declared' ? 'Declares' : 'Handles'} <code>{route.method} {route.path}</code>.{route.registration === 'declared' && ' App registration was not found; this may be a partial address.'}</p>)}
         {node.isTest && <p>This is a test identified by source analysis. ImpactLens has not run it.</p>}
         {path && <>
           {options.length > 1 && <div className="map-path-choice"><label htmlFor="connection-path">Alternative paths to this item</label>
@@ -213,7 +213,7 @@ function RootMap({ report, root }) {
               {options.map((item, index) => <option key={item.index} value={item.index}>Connection {index + 1} of {options.length}</option>)}
             </select>
           </div>}
-          <p className="map-path-caption">Highlighted connection · each next step may call the step before it</p>
+          <p className="map-path-caption">Highlighted connection · each next step may use the step before it</p>
           <ol className="map-detail-path">
             {pathNodes.slice(0, 8).map((key, index) => <li key={`${key}-${index}`}>
               <span>{index === 0 ? 'Changed code' : 'Used by'}</span>

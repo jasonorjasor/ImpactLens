@@ -55,6 +55,7 @@ class AffectedRoute(APIModel):
     symbol_id: str
     method: str
     path: str
+    registration: Literal["registered", "declared"]
 
 
 class ImpactSummary(APIModel):
@@ -67,6 +68,13 @@ class AnalysisError(APIModel):
     source: Literal["base", "target"]
     path: str
     error: str
+
+
+class AnalysisWarning(APIModel):
+    source: Literal["base", "target"]
+    path: str
+    line: int = Field(ge=1)
+    message: str
 
 
 class ResolvedCommits(APIModel):
@@ -95,10 +103,11 @@ class CallSite(APIModel):
     resolution: Literal["local", "import"]
     code: str
     code_truncated: bool
+    relationship: Literal["call", "fastapi_dependency"]
 
 
 class AnalyzeResponse(ImpactSummary):
-    schema_version: Literal[2]
+    schema_version: Literal[3]
     resolved_commits: ResolvedCommits
     symbol_locations: list[SymbolLocation]
     call_sites: list[CallSite]
@@ -109,6 +118,7 @@ class AnalyzeResponse(ImpactSummary):
     evidence_paths: list[ImpactPath]
     historical_impact: ImpactSummary
     analysis_errors: list[AnalysisError]
+    analysis_warnings: list[AnalysisWarning]
 
 
 @app.get("/health")

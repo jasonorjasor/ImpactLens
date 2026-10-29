@@ -25,6 +25,20 @@ async function render(report, initialView = 'report') {
   return renderComponent('/src/App.jsx', 'Report', { report, initialView })
 }
 
+test('shows unresolved framework limitations and distinguishes unregistered route declarations', async () => {
+  const html = await render(makeReport({
+    changed_symbols: [{ id: 'routes.py::me', changed_lines: [4] }],
+    affected_routes: [{ symbol_id: 'routes.py::me', method: 'GET', path: '/users/me', registration: 'declared' }],
+    analysis_warnings: [{ source: 'target', path: 'main.py', line: 3, message: 'A dynamic prefix <unknown> was omitted.' }],
+  }))
+  assert.match(html, /Routes or dependencies may be missing/)
+  assert.match(html, /Analysis limitations/)
+  assert.match(html, /main.py:3/)
+  assert.match(html, /dynamic prefix &lt;unknown&gt;/)
+  assert.match(html, /Declared on a router; app registration was not found/)
+  assert.doesNotMatch(html, /Files not analyzed/)
+})
+
 test('distinguishes direct changes from reached routes and tests', async () => {
   const html = await render(makeReport({
     changed_symbols: [
@@ -45,14 +59,14 @@ test('distinguishes direct changes from reached routes and tests', async () => {
 
   assert.match(html, /<h3>Routes to review<\/h3><span class="count">2<\/span>/)
   assert.match(html, /Why listed:<\/strong> Its Python code changed in this comparison/)
-  assert.match(html, /Why listed:<\/strong> May call .*direct_route/)
+  assert.match(html, /Why listed:<\/strong> May use .*direct_route/)
   assert.match(html, /why-listed--compact/)
   assert.match(html, /<h3>Additional tests to review<\/h3><span class="count">1<\/span>/)
   assert.match(html, /<h3>Other code callers<\/h3><span class="count">1<\/span>/)
   assert.equal(html.split('test_direct</code>').length - 1, 1)
   assert.match(html, /<h3>Possible caller paths<\/h3><span class="count">2<\/span>/)
   assert.match(html, /<h4>Changed code:/)
-  assert.match(html, /Called by<\/span>/)
+  assert.match(html, /Used by<\/span>/)
   assert.match(html, /direct_route<\/code>.*in <code>api.py<\/code>/)
 })
 
@@ -98,7 +112,7 @@ test('shows older-version caller steps and keeps exact line numbers expandable',
   assert.match(html, /Older version, removed lines: 8, 9/)
   assert.match(html, /Older version, before deletion/)
   assert.match(html, /<h4>Deleted code:/)
-  assert.match(html, /Called by<\/span>/)
+  assert.match(html, /Used by<\/span>/)
   assert.ok(html.indexOf('path-source">Older version, before deletion') < html.indexOf('path-source">Newer version'))
 })
 

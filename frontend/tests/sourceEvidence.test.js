@@ -26,6 +26,18 @@ test('shows the actual caller, match basis, definition and pinned source', async
   assert.ok(html.includes(`/blob/${'b'.repeat(40)}/caller.py#L3-L5`))
 })
 
+test('schema 3 labels dependency declarations without presenting them as direct calls', async () => {
+  const data = report()
+  data.schema_version = 3
+  data.call_sites[0] = { ...data.call_sites[0], relationship: 'fastapi_dependency', code: 'def run(user=Depends(work)):' }
+  const html = await render(data, ids)
+  assert.match(html, /run<\/code> depends on <code>work/)
+  assert.match(html, /Declared with Depends/)
+  assert.match(html, /not a direct call in the function body/)
+  assert.doesNotMatch(html, /run<\/code> calls <code>work/)
+  assert.ok(html.includes(`/blob/${'b'.repeat(40)}/caller.py#L4`))
+})
+
 test('uses historical evidence and never substitutes a newer-version call site', async () => {
   const data = report()
   data.call_sites.push({ ...data.call_sites[0], source: 'base', line: 8, line_end: 9, resolution: 'local', code: 'return old_work(' })

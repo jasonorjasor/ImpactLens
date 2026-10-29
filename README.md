@@ -31,6 +31,18 @@ Change detection focuses on functions and methods. Classes are parsed for struct
 
 Dynamic calls such as `getattr`, runtime-selected callbacks, monkey-patching, and generated code can be missed. Import and method resolution uses source-level rules rather than a full type system, so ambiguous calls may be unresolved or matched imperfectly. The analyzer does not run tests or analyze JavaScript, configuration, database changes, or external services. Parse errors are included in the report and indicate incomplete analysis.
 
+FastAPI support includes explicit function parameter dependencies (`Depends(helper)`
+and inline `Annotated` forms), imported names, literal router prefixes, and direct
+`app.include_router(...)` registrations. Evidence labels dependency declarations
+separately from direct calls. Unmounted routers are labeled as declarations whose
+addresses may be partial. Dynamic paths/prefixes, nested registration, shared
+dependency type aliases, class dependencies, and app/router/decorator-level
+dependencies are outside this first subset; recognized unsupported declarations
+appear under Analysis limitations. This is not a complete list of every missed
+framework pattern. Factory-built or conditionally configured apps are unsupported.
+This interprets registrations in each snapshot; changing a module-level router
+prefix or dependency setting alone can still produce no changed-function result.
+
 Working-tree mode reads saved files, not unsaved editor changes. Rename detection uses Git metadata or conservative file similarity; ambiguous cases may appear as an addition and deletion.
 
 ## Install locally

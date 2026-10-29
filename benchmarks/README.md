@@ -96,3 +96,19 @@ Python 3.14 observations with variable network fetching and machine load, includ
 other verification work. They do not establish a speedup or a precise slowdown.
 Sharing syntax trees removes repeated parsing; source evidence and two commit-ID
 lookups add work and increase report size. Capacity limits remain unchanged.
+
+## FastAPI recognition check
+
+On October 29, 2026, the same four comparisons retained their previous report
+contents after projecting out schema metadata and the new route `registration`
+field. Changed/path/error counts remained 7/3/0, 2/7/0, 2/0/0, and 17/121/0;
+call-site and definition counts also matched. All source ranges and first-line
+previews were checked against their frozen Git snapshots. These cases exercise
+existing behavior; the new dependency/prefix cases are in `ACCURACY.md`.
+
+Small in-memory traversal checks covered chains of 100 and 400 edges, fan-outs
+of 10 and 100, and reconverging graphs of 4, 8, and 12 layers. The latter produced
+16, 256, and 4,096 paths, demonstrating exponential path growth. These selected
+samples completed locally but do not establish a safe arbitrary-input bound.
+The map's drawing cap does not limit backend path enumeration. Traversal bounds
+remain work to address before expanding workload or claiming hosting capacity.

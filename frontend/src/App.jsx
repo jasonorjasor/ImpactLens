@@ -78,7 +78,7 @@ function WhyListed({ identifier, changedIds, evidencePaths, historical, kind }) 
       <strong>Why listed:</strong>{' '}
       {path ? (
         <>
-          {historical ? 'In the older version, it may have called ' : 'May call '}
+          {historical ? 'In the older version, it may have used ' : 'May use '}
           <SymbolLabel identifier={path.symbols[0]} /> directly or through other functions.
         </>
       ) : (
@@ -96,12 +96,13 @@ function ImpactSummary({ report, evidencePaths, historical = false, changedIds }
         <Section
           title={historical ? 'Routes in the older version' : 'Routes to review'}
           description={historical
-            ? 'These routes may have called deleted code before the change.'
+            ? 'These routes may have used deleted code before the change.'
             : 'App URLs changed directly or linked to changed code.'}
           items={report.affected_routes}
           renderItem={(route) => (
             <>
               <span className="method">{route.method}</span> <code>{route.path}</code>
+              {route.registration === 'declared' && <span className="detail">Declared on a router; app registration was not found. This may be a partial address.</span>}
               <span className="detail">Handled by <SymbolLabel identifier={route.symbol_id} /></span>
               <WhyListed identifier={route.symbol_id} changedIds={changedIds}
                 evidencePaths={evidencePaths} historical={historical} kind="route" />
@@ -122,7 +123,7 @@ function ImpactSummary({ report, evidencePaths, historical = false, changedIds }
         <Section
           title={historical ? 'Tests in the older version' : 'Additional tests to review'}
           description={historical
-            ? 'These tests may have called deleted code before the change.'
+            ? 'These tests may have used deleted code before the change.'
             : 'Tests that were not edited but may use changed code.'}
           items={relatedTests}
           collapseAfter={4}
@@ -150,7 +151,7 @@ function PathCard({ path }) {
     <ol className="path-steps">
       {path.symbols.slice(1).map((symbol, index) => (
         <li key={index}>
-          <span className="step-label">Called by</span>
+          <span className="step-label">Used by</span>
           <SymbolLabel identifier={symbol} />
         </li>
       ))}
@@ -178,7 +179,7 @@ function CallerPaths({ paths, hasDeletedCode }) {
       </div>
       <p className="section-description">
         {hasDeletedCode && 'Older-version paths appear first. '}
-        Each next step calls the step above it. These are possible connections, not failures.
+        Each next step may use the step above it through a call or a FastAPI dependency. These are possible connections, not failures.
       </p>
       {groups.length === 0 ? (
         <p className="empty">No caller paths found.</p>
@@ -253,6 +254,13 @@ export function Report({ report, initialView = 'report' }) {
               <><code>{item.path}</code><span className="detail">{item.source} version: {item.error}</span></>
             )}
           />
+        </div>
+      )}
+      {report.analysis_warnings?.length > 0 && (
+        <div className="analysis-notice">
+          <p className="caution">Some FastAPI declarations could not be fully traced. Routes or dependencies may be missing.</p>
+          <Section title="Analysis limitations" items={report.analysis_warnings} collapseAfter={3} moreLabel="limitations"
+            renderItem={(item) => <><code>{item.path}:{item.line}</code> ({item.source === 'base' ? 'older version' : 'newer version'})<p>{item.message}</p></>} />
         </div>
       )}
       {hasChanges && <div className="view-switch" role="group" aria-label="Result view">

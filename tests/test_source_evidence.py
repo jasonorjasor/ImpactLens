@@ -1,37 +1,7 @@
-import subprocess
-
 import pytest
 
 import git_analyzer
 from cli import format_report
-
-
-@pytest.fixture
-def comparison(tmp_path):
-    repository = tmp_path / "repo"
-    repository.mkdir()
-
-    def git(*arguments):
-        return subprocess.run(
-            ["git", "-C", str(repository), *arguments], check=True,
-            capture_output=True, text=True,
-        ).stdout.strip()
-
-    git("init")
-    git("config", "user.email", "impactlens@example.com")
-    git("config", "user.name", "ImpactLens Tests")
-    git("config", "commit.gpgsign", "false")
-
-    def commit(sources):
-        for path, source in sources.items():
-            destination = repository / path
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_text(source, encoding="utf-8")
-        git("add", ".")
-        git("commit", "-m", "fixture")
-        return git("rev-parse", "HEAD")
-
-    return repository, commit
 
 
 @pytest.mark.parametrize("deleted", [False, True])
@@ -43,7 +13,7 @@ def test_source_evidence_preserves_repeated_import_calls_and_snapshot(comparison
     report = git_analyzer.analyze_change(repository, base, target)
     source = "base" if deleted else "target"
     assert report["resolved_commits"] == {"base": base, "target": target}
-    assert report["schema_version"] == 2
+    assert report["schema_version"] == 3
     sites = report["call_sites"]
     assert len(sites) == 2
     assert {site["column"] for site in sites} == {11, 23}

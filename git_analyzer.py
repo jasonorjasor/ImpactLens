@@ -369,6 +369,7 @@ def summarize_impact(report, changed_ids, affected_symbols):
             "symbol_id": route["id"],
             "method": route["method"],
             "path": route["path"],
+            "registration": route["registration"],
         }
         for file in report["files"]
         for route in file["routes"]
@@ -420,7 +421,7 @@ def source_evidence(reports, paths, changed):
                     })
             for call in file["calls"]:
                 if (source, call["caller_id"], call["callee_id"]) in edges:
-                    sites.append({"source": source, **{
+                    sites.append({"source": source, "relationship": call.get("relationship", "call"), **{
                         key: call[key] for key in (
                             "caller_id", "callee_id", "path", "line", "line_end", "column",
                             "expression", "resolution", "code", "code_truncated",
@@ -466,7 +467,7 @@ def analyze_change(repository, base_commit, target_commit=None):
 
     locations, sites = source_evidence(reports, evidence_paths, changed)
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "resolved_commits": {"base": resolved_base, "target": resolved_target},
         "symbol_locations": locations,
         "call_sites": sites,
@@ -482,6 +483,11 @@ def analyze_change(repository, base_commit, target_commit=None):
             {"source": source, **error}
             for source, report in reports.items()
             for error in report["errors"]
+        ],
+        "analysis_warnings": [
+            {"source": source, **warning}
+            for source, report in reports.items()
+            for warning in report.get("warnings", [])
         ],
     }
 

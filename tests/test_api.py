@@ -47,9 +47,9 @@ def test_analyze_returns_a_validated_report(monkeypatch, tmp_path):
     def fake_analyzer(*args):
         calls.append(("analyze", args))
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "resolved_commits": {"base": "a" * 40, "target": "b" * 40},
-            "symbol_locations": [], "call_sites": [],
+            "symbol_locations": [], "call_sites": [], "analysis_warnings": [],
             "base_commit": "old",
             "target_commit": "new",
             "changed_symbols": [{
@@ -138,7 +138,7 @@ def test_http_response_contains_real_analysis_and_parse_errors(monkeypatch, tmp_
     assert response.json()["analysis_errors"][0]["path"] == "broken.py"
     assert response.json()["analysis_errors"][0]["source"] == "target"
     body = response.json()
-    assert body["schema_version"] == 2
+    assert body["schema_version"] == 3
     assert body["resolved_commits"] == {"base": base, "target": target}
     assert body["repository_url"] == "https://github.com/owner/repository"
     assert body["call_sites"][0]["path"] == "services.py"
@@ -190,9 +190,9 @@ def test_analyze_rejects_a_malformed_analyzer_result(monkeypatch, tmp_path):
 
 def empty_report():
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "resolved_commits": {"base": "a" * 40, "target": "b" * 40},
-        "symbol_locations": [], "call_sites": [],
+        "symbol_locations": [], "call_sites": [], "analysis_warnings": [],
         "base_commit": "old", "target_commit": "new", "changed_symbols": [],
         "affected_symbols": [], "affected_routes": [], "related_tests": [],
         "historical_impact": {

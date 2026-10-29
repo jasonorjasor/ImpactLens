@@ -36,7 +36,8 @@ def format_impact_sections(report, historical=False, changed_ids=()):
         lines.extend(
             f"- {route['method']} {route['path']} "
             f"({route['symbol_id']}; "
-            f"{'changed directly' if route['symbol_id'] in changed_ids else 'reached via calls'})"
+            f"{'changed directly' if route['symbol_id'] in changed_ids else 'reached via dependencies'}"
+            f"{'; router declaration, app registration not found; address may be partial' if route.get('registration') == 'declared' else ''})"
             for route in routes
         )
     else:
@@ -45,7 +46,7 @@ def format_impact_sections(report, historical=False, changed_ids=()):
     tests = [test for test in report["related_tests"] if test not in changed_ids]
     test_title = "Historical related tests" if historical else "Related tests"
     lines.extend(["", f"{test_title} ({len(tests)})"])
-    lines.extend(f"- {test} (reached via calls)" for test in tests)
+    lines.extend(f"- {test} (reached via dependencies)" for test in tests)
     if not tests:
         lines.append("- changed tests are listed above" if related_tests else "- none")
     return lines
@@ -108,11 +109,12 @@ def format_report(report, max_paths=20):
 
     sites = report.get("call_sites", [])
     if sites:
-        lines.extend(["", f"Call-site evidence ({len(sites)})"])
+        lines.extend(["", f"Source evidence ({len(sites)})"])
         for site in sites if max_paths is None else sites[:max_paths]:
             commit = report["resolved_commits"][site["source"]] or "WORKING_TREE"
+            relation = "depends on (FastAPI Depends)" if site.get("relationship") == "fastapi_dependency" else "calls"
             lines.append(
-                f"- [{site['source']} {commit}] {site['caller_id']} calls {site['callee_id']} "
+                f"- [{site['source']} {commit}] {site['caller_id']} {relation} {site['callee_id']} "
                 f"at {site['path']}:{site['line']} (column {site['column']}; {site['resolution']} match)"
             )
             lines.append(f"  {site['code']}{' …' if site['code_truncated'] else ''}")
@@ -127,6 +129,12 @@ def format_report(report, max_paths=20):
             for item in errors
         )
         lines.append("Results may be incomplete.")
+
+    warnings = report.get("analysis_warnings", [])
+    if warnings:
+        lines.extend(["", f"Analysis limitations ({len(warnings)})"])
+        lines.extend(f"- [{item['source']}] {item['path']}:{item['line']}: {item['message']}" for item in warnings)
+        lines.append("Routes or dependencies may be missing.")
 
     return "\n".join(lines)
 
