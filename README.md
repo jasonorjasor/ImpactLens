@@ -23,6 +23,11 @@ It currently:
 - identifies affected FastAPI routes and pytest tests
 - shows dependency paths from changed code to callers
 
+Web results start with route and test-file review suggestions. Inspect a suggestion
+to open its map connection and source evidence, or copy a file-level pytest command
+in PowerShell or Bash/zsh format. Older-version connections stay separate; the
+command uses only newer-version tests. Suggestions do not establish complete coverage.
+
 ## Limitations
 
 ImpactLens reads Python source without executing it. A reported path is a possible dependency, not proof of a failure. An empty report does not prove a change is safe.

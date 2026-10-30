@@ -98,10 +98,12 @@ function MapCanvas({ view, selectedKey, highlightedNodes, highlightedEdges, onSe
   )
 }
 
-function RootMap({ report, root }) {
+function RootMap({ report, root, initialIdentifier }) {
   const graph = useMemo(() => buildImpactGraph(report, root), [report, root])
-  const [selectedKey, setSelectedKey] = useState(graph.rootKey)
-  const [pathIndex, setPathIndex] = useState(null)
+  const initialKey = graph.nodes.find((item) => item.id === initialIdentifier)?.key || graph.rootKey
+  const [selectedKey, setSelectedKey] = useState(initialKey)
+  const [pathIndex, setPathIndex] = useState(() => initialKey === graph.rootKey ? null
+    : graph.paths.find((item) => item.nodes.includes(initialKey))?.index ?? null)
   const [wholePath, setWholePath] = useState(false)
   const [showContext, setShowContext] = useState(false)
   const [limit, setLimit] = useState(INITIAL_NODE_LIMIT)
@@ -140,8 +142,8 @@ function RootMap({ report, root }) {
           {historical ? 'Older version · before deletion' : 'Newer version'}
         </span>
         <h3>Connections for <code>{root.name}</code></h3>
-        <p className="map-desktop-help">Follow an arrow from code toward a possible caller. Select an item to inspect its connection.</p>
-        <p className="map-mobile-help">Select a caller to inspect its connection to the changed code.</p>
+        <p className="map-desktop-help">Follow an arrow toward code that may use the change. Select an item to inspect its connection.</p>
+        <p className="map-mobile-help">Select connected code to inspect how it may use the change.</p>
         {historical && <p>The deleted code and its connections come from the older version. They may no longer exist.</p>}
       </div>
       <div className="map-toolbar">
@@ -175,13 +177,13 @@ function RootMap({ report, root }) {
         <ul>
           {view.nodes.map((item) => (
             <li key={item.key}>
-              <span>{item.isRoot ? 'Selected change' : 'Connected caller'}</span>
+              <span>{item.isRoot ? 'Selected change' : 'Connected code'}</span>
               <button type="button" className="map-node" aria-pressed={selectedKey === item.key}
                 aria-label={`Inspect ${item.name} in ${item.file}`} onClick={() => selectNode(item.key)}>
                 <Roles node={item} /><code>{item.name}</code>
                 {item.routes.map((route) => <span className="map-route" key={`${route.method} ${route.path}`}>{route.method} {route.path}</span>)}
               </button>
-              {!item.isRoot && <p className="map-list-reason">May call {view.edges.filter((edge) => edge.to === item.key)
+              {!item.isRoot && <p className="map-list-reason">May use {view.edges.filter((edge) => edge.to === item.key)
                 .map((edge) => graph.nodes.find((entry) => entry.key === edge.from).name).join(', ')}.</p>}
             </li>
           ))}
@@ -243,9 +245,9 @@ function RootMap({ report, root }) {
   )
 }
 
-export default function ImpactMap({ report }) {
+export default function ImpactMap({ report, initialFocus }) {
   const roots = useMemo(() => changedRoots(report), [report])
-  const [rootKey, setRootKey] = useState(() => initialRoot(report, roots)?.key)
+  const [rootKey, setRootKey] = useState(() => roots.find((item) => item.key === initialFocus?.rootKey)?.key || initialRoot(report, roots)?.key)
   const root = roots.find((item) => item.key === rootKey) || roots[0]
   if (!root) return null
   return (
@@ -267,7 +269,8 @@ export default function ImpactMap({ report }) {
           </button></li>)}
         </ul>
       </nav>
-      <RootMap key={root.key} report={report} root={root} />
+      <RootMap key={root.key} report={report} root={root}
+        initialIdentifier={root.key === initialFocus?.rootKey ? initialFocus.identifier : undefined} />
     </section>
   )
 }

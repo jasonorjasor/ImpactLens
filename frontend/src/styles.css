@@ -93,6 +93,33 @@ code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size
   .step-label { display: block; margin-bottom: 2px; }
 }
 
+.review-brief { margin: 0 0 28px; padding: 20px; border: 1px solid #ccc; border-radius: 4px; }
+.review-brief h3 { margin: 0; font-size: 20px; font-weight: 650; }
+.review-brief > p { margin: 8px 0 0; color: #555; font-size: 14px; }
+.brief-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.brief-group { min-width: 0; }
+.brief-group h4 { margin: 18px 0 0; padding-bottom: 8px; border-bottom: 1px solid #dedede; font-size: 15px; font-weight: 650; }
+.brief-group h4 .count { margin-left: 6px; }
+.brief-list { margin: 0; padding: 0; list-style: none; }
+.brief-list li { padding: 12px 0; border-bottom: 1px solid #e5e5e5; overflow-wrap: anywhere; }
+.brief-list li:last-child { border-bottom: 0; }
+.brief-list p, .brief-empty { margin: 6px 0; color: #555; font-size: 14px; }
+.review-brief .brief-link { display: inline-block; margin: 4px 0 0; padding: 2px 0; border: 0; background: transparent; color: #333; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; white-space: normal; text-align: left; }
+.review-brief .brief-link:hover:not(:disabled) { background: #f2f2f2; color: #111; }
+.brief-command, .brief-history { margin-top: 16px; padding-top: 14px; border-top: 1px solid #dedede; font-size: 14px; }
+.brief-command > summary, .brief-history > summary { width: fit-content; cursor: pointer; font-weight: 600; }
+.brief-command > p, .brief-history > p { margin: 10px 0; color: #555; }
+.brief-command label { margin: 12px 0 6px; }
+.brief-command select { width: 100%; max-width: 240px; padding: 7px; border: 1px solid #aaa; border-radius: 4px; background: #fff; color: #242424; }
+.brief-command textarea { display: block; width: 100%; padding: 10px; border: 1px solid #aaa; border-radius: 4px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; }
+.brief-copy-status { margin-left: 12px; color: #555; font-size: 13px; }
+.review-brief > .brief-footnote { margin-top: 16px; font-size: 13px; }
+.analysis-detail { scroll-margin-top: 16px; }
+@media (max-width: 760px) {
+  .review-brief { padding: 16px; }
+  .brief-grid { grid-template-columns: 1fr; gap: 0; }
+}
+
 .view-switch { display: flex; gap: 4px; width: fit-content; padding: 4px; margin: 0 0 24px; border: 1px solid #ccc; border-radius: 4px; }
 .view-switch button { margin: 0; padding: 8px 24px; border: 0; background: #fff; color: #444; }
 .view-switch button[aria-pressed="true"] { background: #242424; color: #fff; }

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { requestAnalysis } from './api.js'
 import ImpactMap from './ImpactMap.jsx'
+import ReviewBrief from './ReviewBrief.jsx'
 import { symbolLabel } from './impactGraph.js'
 
 const initialForm = {
@@ -111,7 +112,7 @@ function ImpactSummary({ report, evidencePaths, historical = false, changedIds }
         />
         <Section
           title={historical ? 'Other callers in the older version' : 'Other code callers'}
-          description="Code outside the Changes list that may call changed code."
+          description="Code outside the Changes list that may use changed code."
           items={report.affected_symbols.filter(
             (symbol) => !changedIds.has(symbol) && !isTestIdentifier(symbol),
           )}
@@ -209,6 +210,18 @@ function CallerPaths({ paths, hasDeletedCode }) {
 
 export function Report({ report, initialView = 'report' }) {
   const [view, setView] = useState(initialView)
+  const [mapFocus, setMapFocus] = useState(null)
+  const detail = useRef(null)
+  useEffect(() => {
+    if (mapFocus && view === 'map') {
+      detail.current?.scrollIntoView({ block: 'start' })
+      detail.current?.focus({ preventScroll: true })
+    }
+  }, [mapFocus, view])
+  function explore(focus) {
+    setMapFocus((previous) => ({ ...focus, requestId: (previous?.requestId || 0) + 1 }))
+    setView('map')
+  }
   const hasChanges = report.changed_symbols.length > 0
   const targetChangedIds = new Set(report.changed_symbols
     .filter((symbol) => symbol.change_type !== 'deleted')
@@ -237,7 +250,7 @@ export function Report({ report, initialView = 'report' }) {
             ? (report.changed_symbols.length === 1 ? '1 changed Python function or method detected.' : `${report.changed_symbols.length} changed Python functions or methods detected.`)
             : 'No changed Python functions or methods detected.'}</strong>{' '}
           {hasChanges
-            ? (view === 'map' ? 'Select a change to explore what may use it.' : 'The groups below show the changed code and possible callers.')
+            ? 'Start with the suggested routes and test files below, then inspect their evidence.'
             : 'Other changes may still need review.'}
         </p>
         <p>{hasChanges
@@ -263,11 +276,12 @@ export function Report({ report, initialView = 'report' }) {
             renderItem={(item) => <><code>{item.path}:{item.line}</code> ({item.source === 'base' ? 'older version' : 'newer version'})<p>{item.message}</p></>} />
         </div>
       )}
-      {hasChanges && <div className="view-switch" role="group" aria-label="Result view">
+      {hasChanges && <ReviewBrief report={report} onExplore={explore} />}
+      {hasChanges && <div ref={detail} className="view-switch analysis-detail" tabIndex={-1} role="group" aria-label="Result view">
         <button type="button" aria-pressed={view === 'map'} onClick={() => setView('map')}>Map</button>
         <button type="button" aria-pressed={view === 'report'} onClick={() => setView('report')}>Report</button>
       </div>}
-      {hasChanges && view === 'map' && <ImpactMap report={report} />}
+      {hasChanges && view === 'map' && <ImpactMap key={mapFocus?.requestId || 0} report={report} initialFocus={mapFocus} />}
       {hasChanges && view === 'report' && (
         <>
           <div className="changes-grid">
