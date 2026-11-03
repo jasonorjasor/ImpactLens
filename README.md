@@ -50,6 +50,14 @@ prefix or dependency setting alone can still produce no changed-function result.
 
 Working-tree mode reads saved files, not unsaved editor changes. Rename detection uses Git metadata or conservative file similarity; ambiguous cases may appear as an addition and deletion.
 
+Connection tracing is bounded across all changed functions and both snapshots:
+50,000 tracing steps, 2,000 paths, 512 symbols per path, and 100,000 stored path
+symbols. These are initial resource limits, not a measured hosting capacity.
+Repeated calls retain their source locations but share one graph connection.
+If a limit is exceeded, the API returns a readable 422 error and the CLI exits
+with an error; neither returns a partial report. `--all-paths` changes display
+length, not these tracing limits.
+
 ## Install locally
 
 Install Git, Python, and Node.js. Python 3.14 and Node.js 22 are the verified container runtimes; the package requires Python 3.11 or newer, but older Python versions have not been checked in CI.

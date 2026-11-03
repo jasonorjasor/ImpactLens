@@ -4,6 +4,7 @@ from pathlib import Path
 
 from git_analyzer import AnalysisGitError, AnalysisTimeoutError, analyze_change, analyze_working_tree
 from repository_loader import RepositoryLoadError, is_github_url, normalize_github_url, open_repository
+from request_budget import AnalysisLimitExceeded
 
 
 def is_test_identifier(identifier):
@@ -201,7 +202,7 @@ def main(arguments=None):
                         args.base_commit,
                         args.target_commit,
                     )
-    except (RepositoryLoadError, AnalysisTimeoutError, AnalysisGitError) as error:
+    except (RepositoryLoadError, AnalysisTimeoutError, AnalysisGitError, AnalysisLimitExceeded) as error:
         parser.error(str(error))
 
     if is_github_url(args.repository):

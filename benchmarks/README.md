@@ -110,5 +110,46 @@ Small in-memory traversal checks covered chains of 100 and 400 edges, fan-outs
 of 10 and 100, and reconverging graphs of 4, 8, and 12 layers. The latter produced
 16, 256, and 4,096 paths, demonstrating exponential path growth. These selected
 samples completed locally but do not establish a safe arbitrary-input bound.
-The map's drawing cap does not limit backend path enumeration. Traversal bounds
-remain work to address before expanding workload or claiming hosting capacity.
+The map's drawing cap does not limit backend path enumeration. At that checkpoint,
+traversal bounds remained work to address before expanding workload or claiming
+hosting capacity.
+
+## Bounded traversal check (November 3, 2026)
+
+Stress checks reproduced a recursion error on a 1,200-edge chain and 900 copies
+of one logical path from two layers of 30 repeated source calls. Tracing now uses
+an explicit stack, and graph adjacency deduplicates repeated caller/callee pairs
+in first-seen order. Source call locations remain separate.
+
+One budget is shared across all changed functions and both snapshots: 50,000
+tracing steps, 2,000 paths, 512 symbols per path, and 100,000 stored path symbols.
+A limit rejects the comparison with a readable API/CLI error; no partial report
+is returned. These are initial policy limits, not a safe deployment memory budget.
+
+The four pinned before/after comparisons kept their distinct path, route/test,
+call-site, and definition data. Complete report contents matched after removing
+only duplicate per-change paths from the expected baseline. The deletion case's
+per-change path entries fell from 176 to 121; its 121 distinct global paths,
+60 call sites, and 46 definitions stayed unchanged. The other three full reports
+were identical.
+
+| Comparison | Analysis before / after | Sampled summed RSS before / after |
+| --- | ---: | ---: |
+| ImpactLens | 6.834 / 7.214 s | 87.7 / 89.1 MB |
+| Requests | 6.964 / 9.125 s | 88.3 / 89.4 MB |
+| pytest | 39.164 / 42.532 s | 159.0 / 154.9 MB |
+| ImpactLens deletion | 6.044 / 6.839 s | 118.7 / 119.6 MB |
+
+These are single Windows/Python 3.14 runs alongside other verification, with
+variable Git/network fetching and machine load. They do not establish a speed
+improvement, a precise slowdown, or hosting capacity. RSS is sampled every 20 ms
+across the process and descendants, so brief peaks may be missed and shared pages
+may be counted twice.
+
+The 14-layer synthetic graph previously enumerated 16,384 paths with about
+3.02 MB traced Python allocation peak. The default budget now rejects that graph
+after retaining 2,000 paths internally, with about 0.37 MB traced peak and no
+returned report. This compares bounded rejection with exhaustive enumeration,
+not equal successful workloads; tracemalloc excludes other process allocations.
+A 1,200-edge chain completes with an explicitly larger test depth budget and
+receives a readable depth-limit error under product defaults.

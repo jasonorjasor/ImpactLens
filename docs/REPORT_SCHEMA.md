@@ -80,6 +80,22 @@ runtime mutation are not modeled; registered means a static declaration match.
 
 ## Compatibility
 
+Successful reports retain schema 3. Function-level graph connections and impact
+paths are unique even when a function calls the same helper repeatedly; all
+supporting source call locations remain separate in `call_sites`. This can remove
+duplicate entries from a changed symbol's `impact_paths` without changing the
+distinct global paths, affected routes/tests, or source evidence.
+
+Tracing limits are shared across the entire comparison, including target and
+historical changed symbols: 50,000 root/edge processing steps, 2,000 nontrivial paths,
+512 symbols per path (including a cycle-closing marker), and 100,000 symbols
+summed across those paths. A root with no callers spends a tracing step but not a
+reported-path slot. Limit exhaustion rejects the comparison rather than emitting
+a partial report: HTTP 422 with a string `detail`, or CLI error/exit status 2 and
+no JSON report. A new analysis receives a fresh budget. These limits do not bound
+all parsing, Git loading, source-evidence size, or total process memory; the
+existing request deadline and checkout safeguards still apply independently.
+
 Schema 2 added evidence to the earlier unversioned report. Schema 3 adds typed
 relationships, route registration, and warnings, and uses import-aware FastAPI
 recognition instead of treating any `.get(...)` decorator as a route. New

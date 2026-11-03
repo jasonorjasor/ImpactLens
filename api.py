@@ -13,7 +13,7 @@ from repository_loader import (
     normalize_github_url,
     open_repository,
 )
-from request_budget import RequestDeadlineExceeded, check_deadline, request_deadline
+from request_budget import AnalysisLimitExceeded, RequestDeadlineExceeded, check_deadline, request_deadline
 
 
 app = FastAPI(title="ImpactLens API")
@@ -152,6 +152,8 @@ def analyze_repository_change(request: AnalyzeRequest):
                 report["repository_url"] = normalize_github_url(request.repository).removesuffix(".git")
             check_deadline()
             return report
+    except AnalysisLimitExceeded as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     except (RepositoryTimeoutError, AnalysisTimeoutError, RequestDeadlineExceeded) as error:
         raise HTTPException(status_code=504, detail=str(error)) from error
     except AnalysisGitError as error:

@@ -51,3 +51,9 @@ test('explains a failed connection', async () => {
     { message: 'Could not reach the analysis service. Make sure the API is running.' },
   )
 })
+
+test('keeps a tracing-limit explanation and permits the next request to succeed', async () => {
+  const detail = 'Connection tracing exceeded its connection paths limit (2000). No complete report was produced.'
+  await assert.rejects(requestAnalysis(payload, async () => Response.json({ detail }, { status: 422 })), { message: detail })
+  assert.deepEqual(await requestAnalysis(payload, async () => Response.json({ changed_symbols: [] })), { changed_symbols: [] })
+})

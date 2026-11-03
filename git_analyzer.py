@@ -15,7 +15,7 @@ from analyzer import (
     extract_symbols,
     find_impact_paths,
 )
-from request_budget import check_deadline, command_timeout
+from request_budget import TraversalBudget, check_deadline, command_timeout
 
 
 GIT_TIMEOUT_SECONDS = 60
@@ -446,13 +446,14 @@ def analyze_change(repository, base_commit, target_commit=None):
     evidence_paths = []
     affected = {"base": [], "target": []}
     changed_ids = {"base": [], "target": []}
+    traversal_budget = TraversalBudget()
 
     for symbol in changed:
         check_deadline()
         source = "base" if symbol.get("change_type") == "deleted" else "target"
         changed_ids[source].append(symbol["id"])
         paths = [
-            path for path in find_impact_paths(symbol["id"], graphs[source])
+            path for path in find_impact_paths(symbol["id"], graphs[source], traversal_budget)
             if len(path) > 1
         ]
         symbol["impact_paths"] = [

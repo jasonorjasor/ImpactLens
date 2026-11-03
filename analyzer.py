@@ -6,7 +6,7 @@ import tokenize
 from pathlib import Path
 
 from fastapi_analysis import apply_fastapi, declarations
-from request_budget import check_deadline
+from request_budget import TraversalBudget, check_deadline
 
 
 EXCLUDED_DIRS = {".git", ".venv", "venv", "__pycache__"}
@@ -240,6 +240,9 @@ def build_reverse_graph(calls):
         if caller is not None and callee is not None:
             reverse_graph.setdefault(callee, []).append(caller)
 
+    for callee, callers in reverse_graph.items():
+        check_deadline()
+        reverse_graph[callee] = list(dict.fromkeys(callers))
     return reverse_graph
 
 
@@ -261,24 +264,39 @@ def find_affected_functions(changed_function, graph):
     return affected
 
 
-def find_impact_paths(changed_function, graph):
+def find_impact_paths(changed_function, graph, budget=None):
+    check_deadline()
+    budget = budget if budget is not None else TraversalBudget()
+    budget.consume_step()
+    callers = graph.get(changed_function, ())
+    if not callers:
+        return [[changed_function]]
+
     paths = []
-
-    def visit(current_function, current_path):
+    current_path = [changed_function]
+    members = {changed_function}
+    stack = [iter(callers)]
+    while stack:
         check_deadline()
-        callers = graph.get(current_function, [])
+        try:
+            caller = next(stack[-1])
+        except StopIteration:
+            stack.pop()
+            members.remove(current_path.pop())
+            continue
 
-        if not callers:
-            paths.append(current_path)
-            return
-
-        for caller in callers:
-            if caller in current_path:
-                paths.append(current_path + [f"{caller} (cycle)"])
-            else:
-                visit(caller, current_path + [caller])
-
-    visit(changed_function, [changed_function])
+        budget.consume_step()
+        length = len(current_path) + 1
+        budget.check_depth(length)
+        callers = graph.get(caller, ())
+        if caller in members or not callers:
+            budget.record_path(length)
+            endpoint = f"{caller} (cycle)" if caller in members else caller
+            paths.append(current_path + [endpoint])
+        else:
+            current_path.append(caller)
+            members.add(caller)
+            stack.append(iter(callers))
     return paths
 
 

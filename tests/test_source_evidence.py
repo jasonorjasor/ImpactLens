@@ -14,6 +14,8 @@ def test_source_evidence_preserves_repeated_import_calls_and_snapshot(comparison
     source = "base" if deleted else "target"
     assert report["resolved_commits"] == {"base": base, "target": target}
     assert report["schema_version"] == 3
+    assert len(report["evidence_paths"]) == 1
+    assert len(report["changed_symbols"][0]["impact_paths"]) == 1
     sites = report["call_sites"]
     assert len(sites) == 2
     assert {site["column"] for site in sites} == {11, 23}
