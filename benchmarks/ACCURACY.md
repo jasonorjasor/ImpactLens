@@ -1,5 +1,8 @@
 # Hand-reviewed accuracy cases
 
+For frozen public PRs, useful findings, and real-workflow gaps, see the
+[real-PR casebook](PR_REVIEW.md). The small cases below remain offline regressions.
+
 Run `python -m pytest tests/test_review_cases.py -q -rx` from the repository.
 The fixtures create local Git commits and call the complete commit analyzer.
 They read source without importing or executing fixture code.

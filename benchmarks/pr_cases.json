@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-11-08",
+  "scope": "Selected maintainer-reviewed checks, not exhaustive ground truth or an accuracy score. See PR_REVIEW.md.",
+  "cases": [
+    {
+      "id": "template-users-1396",
+      "repository": "https://github.com/fastapi/full-stack-fastapi-template",
+      "pull_request": "https://github.com/fastapi/full-stack-fastapi-template/pull/1396",
+      "base_tip": "598b74bda63d0fea7100d5d033b4bc49dac27bbc",
+      "base": "598b74bda63d0fea7100d5d033b4bc49dac27bbc",
+      "head": "568f0da57e8dc1b8ff37622b3dfcb20f1a46af2b",
+      "expected": {
+        "changed": ["backend/app/api/routes/users.py::read_user_by_id", "backend/tests/api/routes/test_users.py::test_get_non_existing_user_as_superuser"],
+        "routes": [{"symbol_id": "backend/app/api/routes/users.py::read_user_by_id", "method": "GET", "path": "/users/{user_id}", "registration": "declared"}],
+        "related_tests": ["backend/tests/api/routes/test_users.py::test_get_non_existing_user_as_superuser"]
+      },
+      "review_note": "Edited route and tests are found, but HTTP TestClient requests do not establish direct-call paths. Nested includes/settings prevent a supported full app address."
+    },
+    {
+      "id": "template-reset-1440",
+      "repository": "https://github.com/fastapi/full-stack-fastapi-template",
+      "pull_request": "https://github.com/fastapi/full-stack-fastapi-template/pull/1440",
+      "base_tip": "2e95aea2bf61fc2436feb66ababc14a7c31991e8",
+      "base": "2e95aea2bf61fc2436feb66ababc14a7c31991e8",
+      "head": "b8b68c109e50bea95e766943a8a2af3d08d4d255",
+      "expected": {
+        "changed": ["backend/app/api/routes/login.py::reset_password"],
+        "routes": [{"symbol_id": "backend/app/api/routes/login.py::reset_password", "method": "POST", "path": "/reset-password/", "registration": "declared"}]
+      },
+      "review_note": "Unchanged backend/app/tests/api/routes/test_login.py reset-password HTTP tests deserve manual inspection even though source-call tracing does not list them."
+    },
+    {
+      "id": "template-permissions-1543",
+      "repository": "https://github.com/fastapi/full-stack-fastapi-template",
+      "pull_request": "https://github.com/fastapi/full-stack-fastapi-template/pull/1543",
+      "base_tip": "598b74bda63d0fea7100d5d033b4bc49dac27bbc",
+      "base": "598b74bda63d0fea7100d5d033b4bc49dac27bbc",
+      "head": "9a1159dffd0b18650848239836fe2a7bb65e0cc7",
+      "expected": {
+        "changed": ["backend/app/api/routes/items.py::read_item", "backend/app/api/routes/items.py::update_item", "backend/app/api/routes/items.py::delete_item"],
+        "routes": [
+          {"symbol_id": "backend/app/api/routes/items.py::read_item", "method": "GET", "path": "/items/{id}", "registration": "declared"},
+          {"symbol_id": "backend/app/api/routes/items.py::update_item", "method": "PUT", "path": "/items/{id}", "registration": "declared"},
+          {"symbol_id": "backend/app/api/routes/items.py::delete_item", "method": "DELETE", "path": "/items/{id}", "registration": "declared"}
+        ],
+        "related_tests": ["backend/tests/api/routes/test_items.py::test_read_item_not_enough_permissions", "backend/tests/api/routes/test_items.py::test_update_item_not_enough_permissions", "backend/tests/api/routes/test_items.py::test_delete_item_not_enough_permissions"]
+      },
+      "review_note": "The three status-code tests are edited in the PR; their presence does not demonstrate discovery of unchanged tests or HTTP coverage."
+    },
+    {
+      "id": "template-move-1862",
+      "repository": "https://github.com/fastapi/full-stack-fastapi-template",
+      "pull_request": "https://github.com/fastapi/full-stack-fastapi-template/pull/1862",
+      "base_tip": "61174f18067f17797fd41d5456754c125a2d6ae2",
+      "base": "61174f18067f17797fd41d5456754c125a2d6ae2",
+      "head": "b1bd05310398260ccf2f317ea82396eeee81236b",
+      "expected": {
+        "renamed": [{"id": "backend/tests/api/routes/test_items.py::test_create_item", "previous_id": "backend/app/tests/api/routes/test_items.py::test_create_item"}],
+        "related_tests": ["backend/tests/api/routes/test_items.py::test_create_item"],
+        "absent_related_tests": ["backend/app/tests/api/routes/test_items.py::test_create_item"]
+      },
+      "review_note": "File moves preserve previous identities. Counts include relocated functions with unchanged bodies; they are not a measure of behavioral change."
+    },
+    {
+      "id": "template-compose-2392",
+      "repository": "https://github.com/fastapi/full-stack-fastapi-template",
+      "pull_request": "https://github.com/fastapi/full-stack-fastapi-template/pull/2392",
+      "base_tip": "c9e70d65c74f7adda417fc8de0757207ff77514c",
+      "base": "c9e70d65c74f7adda417fc8de0757207ff77514c",
+      "head": "376deda7293c80bafde2aa9b591c18a60c75ad22",
+      "expected": {"empty_python_comparison": true},
+      "review_note": "Only compose.yml changes database volume/env configuration. Empty Python results cannot judge its operational effect."
+    },
+    {
+      "id": "users-cookie-1552",
+      "repository": "https://github.com/fastapi-users/fastapi-users",
+      "pull_request": "https://github.com/fastapi-users/fastapi-users/pull/1552",
+      "base_tip": "1df7c1038d852c043a7bf637b86dc1932fc2c3c9",
+      "base": "1df7c1038d852c043a7bf637b86dc1932fc2c3c9",
+      "head": "8d54d5cce02d4455cb43d2f1a0448c5b0a25d0d7",
+      "expected": {"changed": ["fastapi_users/fastapi_users.py::FastAPIUsers.get_oauth_router"]},
+      "review_note": "Changed wrapper method is found, but instance wiring and generated routers do not yield useful caller/route suggestions in this sample. No test edits does not mean untested."
+    },
+    {
+      "id": "users-oauth-1485",
+      "repository": "https://github.com/fastapi-users/fastapi-users",
+      "pull_request": "https://github.com/fastapi-users/fastapi-users/pull/1485",
+      "base_tip": "005dbefa20829b754d2ce4180a6a655f9c2ffdcd",
+      "base": "005dbefa20829b754d2ce4180a6a655f9c2ffdcd",
+      "head": "5ae52548836588156bac49ccca0641bc2288c7a5",
+      "expected": {
+        "changed": ["fastapi_users/router/oauth.py::get_oauth_router.callback", "fastapi_users/router/oauth.py::get_oauth_associate_router.callback"],
+        "direct_connections": [
+          ["fastapi_users/router/oauth.py::get_oauth_router", "tests/test_router_oauth.py::app_factory._app_factory"],
+          ["fastapi_users/router/oauth.py::get_oauth_associate_router", "fastapi_users/fastapi_users.py::FastAPIUsers.get_oauth_associate_router"]
+        ],
+        "related_tests": ["tests/test_router_oauth.py::TestCallback.test_callback_token_expired", "tests/test_router_oauth.py::TestCallback.test_callback_decode_token_error", "tests/test_router_oauth.py::TestAssociateCallback.test_callback_token_expired", "tests/test_router_oauth.py::TestAssociateCallback.test_callback_decode_token_error"]
+      },
+      "review_note": "Containing factories and nested callbacks both appear. Class-attribute enum edits are outside the detector; HTTP/fixture wiring and generated app addresses remain incomplete. Factory edges were source-reviewed after the initial report."
+    },
+    {
+      "id": "users-docs-1564",
+      "repository": "https://github.com/fastapi-users/fastapi-users",
+      "pull_request": "https://github.com/fastapi-users/fastapi-users/pull/1564",
+      "base_tip": "5a8e3269e3f74ca620ce96664f5b33afc0ad34d7",
+      "base": "5a8e3269e3f74ca620ce96664f5b33afc0ad34d7",
+      "head": "3956080c7b08df4adb83d6e89cfbc771b430970f",
+      "expected": {"empty_python_comparison": true},
+      "review_note": "Documentation-link change; correctly no changed Python functions. Whole-snapshot framework warnings can still be present."
+    },
+    {
+      "id": "users-jwt-1369",
+      "repository": "https://github.com/fastapi-users/fastapi-users",
+      "pull_request": "https://github.com/fastapi-users/fastapi-users/pull/1369",
+      "base_tip": "bb1b0d759e33598bc83dc440c025ffb2053191ff",
+      "base": "bb1b0d759e33598bc83dc440c025ffb2053191ff",
+      "head": "783bfe51268f68e320c8721894ddc45c1b5f1c4f",
+      "expected": {
+        "changed": ["fastapi_users/jwt.py::generate_jwt"],
+        "direct_connections": [
+          ["fastapi_users/jwt.py::generate_jwt", "fastapi_users/authentication/strategy/jwt.py::JWTStrategy.write_token"],
+          ["fastapi_users/jwt.py::generate_jwt", "fastapi_users/manager.py::BaseUserManager.request_verify"],
+          ["fastapi_users/jwt.py::generate_jwt", "fastapi_users/manager.py::BaseUserManager.forgot_password"],
+          ["fastapi_users/jwt.py::generate_jwt", "fastapi_users/router/oauth.py::generate_state_token"],
+          ["fastapi_users/jwt.py::generate_jwt", "tests/test_jwt.py::test_generate_decode_jwt"],
+          ["fastapi_users/jwt.py::generate_jwt", "tests/test_manager.py::verify_token._verify_token"],
+          ["fastapi_users/jwt.py::generate_jwt", "tests/test_manager.py::forgot_password_token._forgot_password_token"],
+          ["fastapi_users/jwt.py::generate_jwt", "tests/test_authentication_strategy_jwt.py::token._token"]
+        ],
+        "related_tests": ["tests/test_jwt.py::test_generate_decode_jwt"]
+      },
+      "review_note": "Only the shared helper changes; unchanged callers/tests provide context outside the diff. Fixture users and factory-built app URLs remain incomplete. Selected after reviewing the first five template reports; the eight direct-call expectations were written before analyzing this case."
+    }
+  ]
+}

@@ -12,6 +12,8 @@ The walkthrough uses actual local-app captures, with loading pauses shortened.
 
 For a repeatable walkthrough, see [DEMO.md](DEMO.md).
 For small hand-reviewed examples and a known missed dependency, see [benchmarks/ACCURACY.md](benchmarks/ACCURACY.md).
+For findings and limitations on nine frozen real pull requests, see [the real-PR casebook](benchmarks/PR_REVIEW.md).
+For the local first-review exercise and observation guide, see [the usability checkpoint](docs/usability/README.md).
 For the proposed Docker deployment and host checks, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 It currently:
@@ -35,6 +37,11 @@ ImpactLens reads Python source without executing it. A reported path is a possib
 Change detection focuses on functions and methods. Classes are parsed for structure, but class attributes and module-level code can change without producing a changed-function result.
 
 Dynamic calls such as `getattr`, runtime-selected callbacks, monkey-patching, and generated code can be missed. Import and method resolution uses source-level rules rather than a full type system, so ambiguous calls may be unresolved or matched imperfectly. The analyzer does not run tests or analyze JavaScript, configuration, database changes, or external services. Parse errors are included in the report and indicate incomplete analysis.
+
+Related tests come from edited test code or supported source connections. ImpactLens
+does not infer endpoint coverage from HTTP test requests or pytest fixture injection.
+Projects whose Python import root differs from the repository root (for example,
+`app.*` imports from `backend/app`) can also leave cross-file connections unresolved.
 
 FastAPI support includes explicit function parameter dependencies (`Depends(helper)`
 and inline `Annotated` forms), imported names, literal router prefixes, and direct
@@ -122,7 +129,7 @@ The top-level affected symbols, routes, and tests use target-version evidence. `
 `changed_lines` refers to the target version; `removed_lines` refers to the base version. Deleted functions' start and end lines refer to the base version.
 If a Python file cannot be parsed, `analysis_errors` names the file and version. The report may be incomplete.
 
-Reports use `schema_version: 2`. `resolved_commits` pins the analyzed snapshots; `symbol_locations` and `call_sites` preserve versioned definitions and call-site evidence for reported connections. See [the report schema](docs/REPORT_SCHEMA.md) for fields and compatibility notes.
+Reports use `schema_version: 3`. `resolved_commits` pins the analyzed snapshots; `symbol_locations` and `call_sites` preserve versioned definitions and call-site evidence for reported connections. See [the report schema](docs/REPORT_SCHEMA.md) for fields and compatibility notes.
 
 ## Run the API
 
