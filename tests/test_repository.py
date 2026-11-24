@@ -211,3 +211,23 @@ def test_relative_imports_in_package_initializer_stay_inside_the_package(tmp_pat
         "pkg/services.py::create_user",
         "pkg/services.py::create_user",
     ]
+
+
+def test_package_reassignment_after_submodule_import_is_not_followed(tmp_path):
+    _write_package(tmp_path, {
+        "pkg/__init__.py": "from . import services\nservices = object()\n",
+        "pkg/services.py": "def create_user():\n    return 1\n",
+        "routes.py": "from pkg import services\n\ndef a():\n    return services.create_user()\n",
+    })
+
+    assert _call(analyze_repository(tmp_path), "routes.py")["callee_id"] is None
+
+
+def test_function_level_import_does_not_count_as_package_reexport(tmp_path):
+    _write_package(tmp_path, {
+        "pkg/__init__.py": "services = object()\n\ndef load():\n    from . import services\n    return services\n",
+        "pkg/services.py": "def create_user():\n    return 1\n",
+        "routes.py": "from pkg import services\n\ndef a():\n    return services.create_user()\n",
+    })
+
+    assert _call(analyze_repository(tmp_path), "routes.py")["callee_id"] is None

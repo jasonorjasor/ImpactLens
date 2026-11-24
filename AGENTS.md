@@ -39,6 +39,14 @@
 - Limitation: package bindings are read from source only. A later `import pkg.X` elsewhere replaces the attribute at runtime and is not modeled. If `pkg/__init__.py` fails to parse, the package is treated like a namespace package, and the report already lists the parse error.
 - Evidence: three regression tests in `tests/test_repository.py` (export precedence, re-export still resolves, initializer stays inside its package). The nine real-PR cases still match previous results, and analyzing template `backend/` as root still resolves 169 of 793 calls.
 
+### 2026-11-24: Follow a package re-export only when its module-level binding is clear (second review)
+
+- Choice: record every module-level binding in each file (definitions, assignments, deletions, and imports, including inside `if`/`try`, but not inside functions or classes). `from pkg import X` follows submodule `pkg.X` only when `pkg/__init__.py` does not bind `X`, or when every binding of `X` there is an import of that same submodule.
+- Reason: the first fix read imports from anywhere in the initializer and ignored later assignments. A second review reproduced wrong links for `from . import services` followed by `services = ...`, and for a re-export that appears only inside a function.
+- Alternative: replay statements in order to find the final binding. Not chosen; control flow such as `try`/`if` makes the final value uncertain, and refusing mixed bindings is simpler and errs toward no link.
+- Limitation: any non-import binding of the name (for example, a fallback `services = None` in `except ImportError`) leaves the call unresolved even when the import usually succeeds.
+- Evidence: two regression tests in `tests/test_repository.py`. The nine real-PR cases still match previous results, and analyzing template `backend/` as root still resolves 169 of 793 calls.
+
 ## Next steps
 
 1. Import roots: detect or accept a source root (for example `backend/`) so `app.*` imports match. The probe above shows this unlocks the submodule fix on real code.

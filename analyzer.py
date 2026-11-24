@@ -330,22 +330,33 @@ def resolve_import_module(imported_module, current_module, is_package=False):
     return ".".join(part for part in parts if part)
 
 
-def module_level_names(tree):
-    names = set()
+def module_level_bindings(tree, current_module, is_package):
+    """Map each module-level name to what it is bound to: an imported module path or None."""
+    bindings = {}
     to_visit = list(tree.body)
     while to_visit:
         node = to_visit.pop()
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            names.add(node.name)
+            bindings.setdefault(node.name, set()).add(None)
             continue
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
+        if isinstance(node, ast.Import):
             for alias in node.names:
-                names.add(alias.asname or alias.name.split(".")[0])
+                name = alias.asname or alias.name.split(".")[0]
+                bindings.setdefault(name, set()).add(alias.name if alias.asname else name)
             continue
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            names.add(node.id)
+        if isinstance(node, ast.ImportFrom):
+            module = "." * node.level + (node.module or "")
+            resolved = resolve_import_module(module, current_module, is_package)
+            for alias in node.names:
+                if alias.name == "*":
+                    continue
+                target = ".".join(part for part in (resolved, alias.name) if part)
+                bindings.setdefault(alias.asname or alias.name, set()).add(target)
+            continue
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            bindings.setdefault(node.id, set()).add(None)
         to_visit.extend(ast.iter_child_nodes(node))
-    return names
+    return bindings
 
 
 def _imported_submodule(binding, files_by_module):
@@ -355,13 +366,10 @@ def _imported_submodule(binding, files_by_module):
         return module
     if not package["is_package"]:
         return None
-    if binding["name"] not in package["module_names"]:
+    package_binding = package["module_bindings"].get(binding["name"])
+    # A package-level binding wins unless every binding re-exports this same submodule.
+    if package_binding is None or package_binding == {module}:
         return module
-    # The package's own binding wins unless it re-exports this same submodule.
-    for item in package["imports"]:
-        if item["local_name"] == binding["name"]:
-            reexported = ".".join(part for part in (item["resolved_module"], item["name"]) if part)
-            return module if reexported == module else None
     return None
 
 
@@ -495,7 +503,9 @@ def analyze_sources(source_by_path):
                 "path": relative_path,
                 "module": module_name(relative_path),
                 "is_package": is_package,
-                "module_names": module_level_names(tree),
+                "module_bindings": module_level_bindings(
+                    tree, module_name(relative_path), is_package
+                ),
                 "symbols": symbols,
                 "functions": functions,
                 "calls": calls,
