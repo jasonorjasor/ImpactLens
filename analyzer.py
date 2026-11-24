@@ -331,7 +331,10 @@ def resolve_import_module(imported_module, current_module, is_package=False):
 
 
 def module_level_bindings(tree, current_module, is_package):
-    """Map each module-level name to what it is bound to: an imported module path or None."""
+    """Map each module-level name to what it is bound to: an imported module path or None.
+
+    The key "*" records a wildcard import, which may bind any name.
+    """
     bindings = {}
     to_visit = list(tree.body)
     while to_visit:
@@ -349,6 +352,7 @@ def module_level_bindings(tree, current_module, is_package):
             resolved = resolve_import_module(module, current_module, is_package)
             for alias in node.names:
                 if alias.name == "*":
+                    bindings.setdefault("*", set()).add(resolved)
                     continue
                 target = ".".join(part for part in (resolved, alias.name) if part)
                 bindings.setdefault(alias.asname or alias.name, set()).add(target)
@@ -365,6 +369,8 @@ def _imported_submodule(binding, files_by_module):
     if package is None:
         return module
     if not package["is_package"]:
+        return None
+    if "*" in package["module_bindings"]:
         return None
     package_binding = package["module_bindings"].get(binding["name"])
     # A package-level binding wins unless every binding re-exports this same submodule.

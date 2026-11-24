@@ -47,6 +47,14 @@
 - Limitation: any non-import binding of the name (for example, a fallback `services = None` in `except ImportError`) leaves the call unresolved even when the import usually succeeds.
 - Evidence: two regression tests in `tests/test_repository.py`. The nine real-PR cases still match previous results, and analyzing template `backend/` as root still resolves 169 of 793 calls.
 
+### 2026-11-24: Treat wildcard package exports as uncertain (third review)
+
+- Choice: if `pkg/__init__.py` has a module-level `from ... import *`, `from pkg import X` never infers submodule `pkg.X`.
+- Reason: a third review reproduced a wrong link when `from .exports import *` supplied a value named `services`; Python uses that value, not `pkg/services.py`.
+- Alternative: read the wildcard source (and its `__all__`) to see whether it binds `X`. Deferred; it needs recursive, cross-file export tracking, and the simple guard prevents the wrong link now.
+- Limitation: packages that re-export with `from .models import *` lose every submodule link through that package, even for names the wildcard does not supply. Neither benchmark repository uses wildcard imports in an initializer, so this cost is not yet measured.
+- Evidence: one regression test in `tests/test_repository.py`. The nine real-PR cases still match previous results, and analyzing template `backend/` as root still resolves 169 of 793 calls.
+
 ## Next steps
 
 1. Import roots: detect or accept a source root (for example `backend/`) so `app.*` imports match. The probe above shows this unlocks the submodule fix on real code.

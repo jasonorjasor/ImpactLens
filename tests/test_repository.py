@@ -231,3 +231,14 @@ def test_function_level_import_does_not_count_as_package_reexport(tmp_path):
     })
 
     assert _call(analyze_repository(tmp_path), "routes.py")["callee_id"] is None
+
+
+def test_wildcard_package_import_makes_submodule_link_uncertain(tmp_path):
+    _write_package(tmp_path, {
+        "pkg/__init__.py": "from .exports import *\n",
+        "pkg/exports.py": "services = object()\n",
+        "pkg/services.py": "def create_user():\n    return 1\n",
+        "routes.py": "from pkg import services\n\ndef a():\n    return services.create_user()\n",
+    })
+
+    assert _call(analyze_repository(tmp_path), "routes.py")["callee_id"] is None
