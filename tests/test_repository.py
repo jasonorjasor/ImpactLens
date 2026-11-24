@@ -125,3 +125,89 @@ def test_resolves_relative_package_imports(tmp_path):
     assert imported["resolved_module"] == "package.auth"
     assert call["callee_id"] == "package/auth.py::verify_user"
     assert call["resolution"] == "import"
+
+
+def _write_package(source_root, files):
+    for relative_path, source in files.items():
+        path = source_root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+
+
+def _call(report, path):
+    file = next(file for file in report["files"] if file["path"] == path)
+    return file["calls"][0]
+
+
+def test_resolves_calls_through_imported_submodules(tmp_path):
+    _write_package(tmp_path, {
+        "pkg/__init__.py": "",
+        "pkg/services.py": "def create_user():\n    return 1\n",
+        "routes.py": "from pkg import services\n\ndef a():\n    return services.create_user()\n",
+        "aliased.py": "from pkg import services as svc\n\ndef b():\n    return svc.create_user()\n",
+        "pkg/relative.py": "from . import services\n\ndef c():\n    return services.create_user()\n",
+    })
+
+    report = analyze_repository(tmp_path)
+
+    for path in ("routes.py", "aliased.py", "pkg/relative.py"):
+        call = _call(report, path)
+        assert call["callee_id"] == "pkg/services.py::create_user"
+        assert call["resolution"] == "import"
+
+
+def test_does_not_treat_an_imported_class_as_a_submodule(tmp_path):
+    _write_package(tmp_path, {
+        "pkg/__init__.py": "class Service:\n    @staticmethod\n    def create():\n        return 1\n",
+        "routes.py": "from pkg import Service\n\ndef a():\n    return Service.create()\n",
+    })
+
+    call = _call(analyze_repository(tmp_path), "routes.py")
+
+    assert call["callee_id"] is None
+    assert call["resolution"] == "unresolved"
+
+
+def test_package_export_takes_precedence_over_same_named_submodule(tmp_path):
+    _write_package(tmp_path, {
+        "pkg/__init__.py": "class Service:\n    @staticmethod\n    def create():\n        return 1\n",
+        "pkg/Service.py": "def create():\n    return 2\n",
+        "routes.py": "from pkg import Service\n\ndef a():\n    return Service.create()\n",
+    })
+
+    call = _call(analyze_repository(tmp_path), "routes.py")
+
+    assert call["callee_id"] is None
+
+
+def test_package_reexport_of_its_own_submodule_still_resolves(tmp_path):
+    _write_package(tmp_path, {
+        "pkg/__init__.py": "from . import services\n",
+        "pkg/services.py": "def create_user():\n    return 1\n",
+        "routes.py": "from pkg import services\n\ndef a():\n    return services.create_user()\n",
+    })
+
+    call = _call(analyze_repository(tmp_path), "routes.py")
+
+    assert call["callee_id"] == "pkg/services.py::create_user"
+
+
+def test_relative_imports_in_package_initializer_stay_inside_the_package(tmp_path):
+    _write_package(tmp_path, {
+        "services.py": "def create_user():\n    return 0\n",
+        "pkg/services.py": "def create_user():\n    return 1\n",
+        "pkg/__init__.py": (
+            "from . import services\nfrom .services import create_user\n\n"
+            "def a():\n    return services.create_user()\n\n"
+            "def b():\n    return create_user()\n"
+        ),
+    })
+
+    report = analyze_repository(tmp_path)
+    initializer = next(file for file in report["files"] if file["path"] == "pkg/__init__.py")
+
+    assert [item["resolved_module"] for item in initializer["imports"]] == ["pkg", "pkg.services"]
+    assert [call["callee_id"] for call in initializer["calls"]] == [
+        "pkg/services.py::create_user",
+        "pkg/services.py::create_user",
+    ]

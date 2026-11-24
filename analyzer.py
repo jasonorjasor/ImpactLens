@@ -315,14 +315,14 @@ def module_name(relative_path):
     return name[:-9] if name.endswith(".__init__") else name
 
 
-def resolve_import_module(imported_module, current_module):
+def resolve_import_module(imported_module, current_module, is_package=False):
     if not imported_module.startswith("."):
         return imported_module
 
     level = len(imported_module) - len(imported_module.lstrip("."))
     remainder = imported_module[level:]
     current_parts = current_module.split(".") if current_module else []
-    package_parts = current_parts[:-1]
+    package_parts = current_parts if is_package else current_parts[:-1]
     if level > 1:
         package_parts = package_parts[: -(level - 1)]
 
@@ -330,7 +330,43 @@ def resolve_import_module(imported_module, current_module):
     return ".".join(part for part in parts if part)
 
 
+def module_level_names(tree):
+    names = set()
+    to_visit = list(tree.body)
+    while to_visit:
+        node = to_visit.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+            continue
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                names.add(alias.asname or alias.name.split(".")[0])
+            continue
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            names.add(node.id)
+        to_visit.extend(ast.iter_child_nodes(node))
+    return names
+
+
+def _imported_submodule(binding, files_by_module):
+    module = ".".join(part for part in (binding["resolved_module"], binding["name"]) if part)
+    package = files_by_module.get(binding["resolved_module"])
+    if package is None:
+        return module
+    if not package["is_package"]:
+        return None
+    if binding["name"] not in package["module_names"]:
+        return module
+    # The package's own binding wins unless it re-exports this same submodule.
+    for item in package["imports"]:
+        if item["local_name"] == binding["name"]:
+            reexported = ".".join(part for part in (item["resolved_module"], item["name"]) if part)
+            return module if reexported == module else None
+    return None
+
+
 def _resolve_files(files):
+    files_by_module = {file["module"]: file for file in files}
     functions_by_file_and_qualname = {}
     for file in files:
         check_deadline()
@@ -375,6 +411,9 @@ def _resolve_files(files):
                     target_name = binding["name"]
                 elif len(parts) == 2 and binding and binding["name"] is None:
                     target_module = binding["resolved_module"]
+                    target_name = parts[1]
+                elif len(parts) == 2 and binding:
+                    target_module = _imported_submodule(binding, files_by_module)
                     target_name = parts[1]
 
                 candidates = functions_by_module_and_name.get(
@@ -433,9 +472,10 @@ def analyze_sources(source_by_path):
                 if call["caller"] is not None
                 else None
             )
+        is_package = relative_path == "__init__.py" or relative_path.endswith("/__init__.py")
         for item in imports:
             item["resolved_module"] = resolve_import_module(
-                item["module"], module_name(relative_path)
+                item["module"], module_name(relative_path), is_package
             )
         for route in routes:
             route["id"] = f"{relative_path}::{route['qualname']}"
@@ -454,6 +494,8 @@ def analyze_sources(source_by_path):
             {
                 "path": relative_path,
                 "module": module_name(relative_path),
+                "is_package": is_package,
+                "module_names": module_level_names(tree),
                 "symbols": symbols,
                 "functions": functions,
                 "calls": calls,
