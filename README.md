@@ -40,8 +40,7 @@ Dynamic calls such as `getattr`, runtime-selected callbacks, monkey-patching, an
 
 Related tests come from edited test code or supported source connections. ImpactLens
 does not infer endpoint coverage from HTTP test requests or pytest fixture injection.
-Projects whose Python import root differs from the repository root (for example,
-`app.*` imports from `backend/app`) can also leave cross-file connections unresolved.
+Projects that import Python modules from a subfolder can set `--import-root` in the CLI.
 
 FastAPI support includes explicit function parameter dependencies (`Depends(helper)`
 and inline `Annotated` forms), imported names, literal router prefixes, and direct
@@ -103,6 +102,20 @@ For a public GitHub repository:
 ```powershell
 python cli.py https://github.com/OWNER/REPOSITORY BASE_COMMIT TARGET_COMMIT
 ```
+
+If the project imports `app.crud` from `backend/app/crud.py`, use `backend` as the
+Python import root:
+
+```powershell
+python cli.py PATH_TO_REPOSITORY BASE_COMMIT TARGET_COMMIT --import-root backend
+```
+
+The CLI accepts one repository-relative folder, such as `backend` or `src`. The
+folder must exist in at least one of the compared versions. It applies to local
+and public GitHub comparisons and to `--working-tree`. Files outside the folder
+remain in the analysis, and source paths stay relative to the repository. If the
+chosen folder creates conflicting module names or top-level packages, the CLI
+reports the conflicting paths. The web form uses the repository root.
 
 Compare the current files with `HEAD`:
 

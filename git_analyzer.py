@@ -8,12 +8,14 @@ from pathlib import Path
 from git_process import GitDiskLimitExceeded, run_git_command
 from repository_loader import RepositoryLoadError
 from analyzer import (
+    ImportRootError,
     analyze_sources,
     analyze_repository,
     build_reverse_graph,
     decode_python_source,
     extract_symbols,
     find_impact_paths,
+    normalize_import_root,
 )
 from request_budget import TraversalBudget, check_deadline, command_timeout
 
@@ -314,9 +316,9 @@ def changed_symbols(repository, base_commit, target_commit=None):
     return symbols
 
 
-def analyze_commit(repository, commit=None):
+def analyze_commit(repository, commit=None, *, import_root=None):
     if commit is None:
-        return analyze_repository(repository)
+        return analyze_repository(repository, import_root=import_root)
 
     listing = run_git(repository, "ls-tree", "-r", "-z", commit, "--", binary=True)
     entries = []
@@ -359,7 +361,7 @@ def analyze_commit(repository, commit=None):
 
     if offset != len(output):
         raise ValueError("Git returned extra blob data")
-    return analyze_sources(sources)
+    return analyze_sources(sources, import_root=import_root)
 
 
 def summarize_impact(report, changed_ids, affected_symbols):
@@ -430,13 +432,30 @@ def source_evidence(reports, paths, changed):
     return locations, sites
 
 
-def analyze_change(repository, base_commit, target_commit=None):
+def _contains_import_root(repository, commit, import_root):
+    if commit is None:
+        root = Path(repository).resolve()
+        folder = (root / import_root).resolve()
+        return folder.is_relative_to(root) and folder.is_dir()
+    directories = run_git(
+        repository, "ls-tree", "--full-tree", "-d", "--name-only", "-z", commit, "--", import_root,
+        binary=True,
+    )
+    return import_root.encode("utf-8", errors="surrogateescape") in directories.split(b"\0")
+
+
+def analyze_change(repository, base_commit, target_commit=None, *, import_root=None):
+    import_root = normalize_import_root(import_root)
     resolved_base = resolve_commit(repository, base_commit)
     resolved_target = resolve_commit(repository, target_commit) if target_commit is not None else None
+    if import_root and not any(
+        _contains_import_root(repository, commit, import_root) for commit in (resolved_target, resolved_base)
+    ):
+        raise ImportRootError(f"Import root {import_root!r} was not found in either version being compared.")
     changed = changed_symbols(repository, resolved_base, resolved_target)
-    reports = {"target": analyze_commit(repository, resolved_target)}
+    reports = {"target": analyze_commit(repository, resolved_target, import_root=import_root)}
     if any(symbol.get("change_type") == "deleted" for symbol in changed):
-        reports["base"] = analyze_commit(repository, resolved_base)
+        reports["base"] = analyze_commit(repository, resolved_base, import_root=import_root)
     graphs = {
         source: build_reverse_graph([
             call for file in report["files"] for call in file["calls"]
@@ -469,6 +488,7 @@ def analyze_change(repository, base_commit, target_commit=None):
     locations, sites = source_evidence(reports, evidence_paths, changed)
     return {
         "schema_version": 3,
+        **({"import_root": import_root} if import_root else {}),
         "resolved_commits": {"base": resolved_base, "target": resolved_target},
         "symbol_locations": locations,
         "call_sites": sites,
@@ -493,5 +513,5 @@ def analyze_change(repository, base_commit, target_commit=None):
     }
 
 
-def analyze_working_tree(repository, base_commit="HEAD"):
-    return analyze_change(repository, base_commit, None)
+def analyze_working_tree(repository, base_commit="HEAD", *, import_root=None):
+    return analyze_change(repository, base_commit, None, import_root=import_root)

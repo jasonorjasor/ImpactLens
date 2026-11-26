@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 import cli
 
 
@@ -181,3 +183,82 @@ def test_format_report_keeps_historical_route_without_callers():
     assert "Historical routes (1)" in output
     assert "POST /api/login (routes.py::login_route; changed directly)" in output
     assert "- no caller paths found" in output
+
+
+def test_import_root_finds_unchanged_callers_and_keeps_repository_paths(comparison, capsys):
+    repository, commit = comparison
+    helper = "backend/app/crud.py"
+    route = "backend/app/routes.py"
+    base = commit({
+        "backend/app/__init__.py": "",
+        helper: "def price():\n    return 1\n",
+        route: "from app import crud\nfrom fastapi import APIRouter\nrouter = APIRouter()\n\n"
+        "@router.get('/price')\ndef read_price():\n    return crud.price()\n",
+        "backend/main.py": "from fastapi import FastAPI\nfrom app.routes import router\n"
+        "app = FastAPI()\napp.include_router(router, prefix='/shop')\n",
+        "tests/test_price.py": "from app.routes import read_price\n\n"
+        "def test_price():\n    assert read_price() == 1\n",
+    })
+    head = commit({helper: "def price():\n    return 2\n"})
+    arguments = [str(repository), base, head, "--json"]
+    assert cli.main(arguments) == 0
+    default = json.loads(capsys.readouterr().out)
+    assert default["evidence_paths"] == []
+
+    assert cli.main([*arguments, "--import-root", "backend"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["import_root"] == "backend"
+    assert report["resolved_commits"] == {"base": base, "target": head}
+    assert report["evidence_paths"] == [{"source": "target", "symbols": [
+        f"{helper}::price", f"{route}::read_price", "tests/test_price.py::test_price",
+    ]}]
+    assert report["affected_routes"] == [{
+        "symbol_id": f"{route}::read_price", "method": "GET", "path": "/shop/price", "registration": "registered",
+    }]
+    assert report["related_tests"] == ["tests/test_price.py::test_price"]
+    assert {(site["path"], site["line"], site["expression"]) for site in report["call_sites"]} == {
+        (route, 7, "crud.price"), ("tests/test_price.py", 4, "read_price"),
+    }
+
+    assert cli.main([str(repository), base, "--working-tree", "--json", "--import-root", ".\\backend\\"]) == 0
+    working_tree = json.loads(capsys.readouterr().out)
+    assert working_tree["import_root"] == "backend"
+    assert working_tree["resolved_commits"]["target"] is None
+    assert working_tree["evidence_paths"] == report["evidence_paths"]
+
+
+def test_import_root_rejects_ambiguous_names_instead_of_linking_wrong_file(comparison, capsys):
+    repository, commit = comparison
+    base = commit({
+        "backend/app.py": "def value():\n    return 1\n",
+        "app.py": "def value():\n    return 8\n",
+        "caller.py": "from app import value\ndef read():\n    return value()\n",
+    })
+    head = commit({"backend/app.py": "def value():\n    return 2\n"})
+    with pytest.raises(SystemExit) as error:
+        cli.main([str(repository), base, head, "--json", "--import-root", "backend"])
+    output = capsys.readouterr()
+    assert error.value.code == 2 and not output.out
+    assert "ambiguous" in output.err and "backend/app.py" in output.err
+
+
+def test_import_root_handles_removed_directory_and_invalid_root(comparison, capsys):
+    repository, commit = comparison
+    helper = "backend/pkg.py"
+    base = commit({
+        helper: "def calculate():\n    return 1\n",
+        "routes.py": "from pkg import calculate\ndef run():\n    return calculate()\n",
+    })
+    (repository / helper).unlink()
+    head = commit({})
+    arguments = [str(repository), base, head, "--json", "--import-root"]
+    assert cli.main([*arguments, "backend"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["evidence_paths"] == [{"source": "base", "symbols": [f"{helper}::calculate", "routes.py::run"]}]
+
+    for folder, message in [("missing", "not found in either version"), ("../backend", "repository-relative folder")]:
+        with pytest.raises(SystemExit) as error:
+            cli.main([*arguments, folder])
+        output = capsys.readouterr()
+        assert error.value.code == 2 and not output.out
+        assert message in output.err

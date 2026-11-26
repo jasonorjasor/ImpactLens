@@ -55,9 +55,17 @@
 - Limitation: packages that re-export with `from .models import *` lose every submodule link through that package, even for names the wildcard does not supply. Neither benchmark repository uses wildcard imports in an initializer, so this cost is not yet measured.
 - Evidence: one regression test in `tests/test_repository.py`. The nine real-PR cases still match previous results, and analyzing template `backend/` as root still resolves 169 of 793 calls.
 
+### 2026-11-26 — Explicit Python import roots in the CLI
+
+- Choice. Accept one optional repository-relative `--import-root` for Python module names. Keep every analyzed file and its original repository-relative identity. Record the selected root in CLI reports.
+- Reason. With the repository root as the default, `backend/app/crud.py` becomes `backend.app.crud` and calls via `app.crud` can be missed.
+- Alternative. Detect a root automatically. Defer until concrete layouts make the expected selection clear.
+- Limitation. A module or top-level package collision introduced by the chosen root stops the comparison with the conflicting paths. The web form continues to use the repository root.
+- Evidence. A real Git regression reaches an unchanged route and an unchanged test that lives outside the selected root. The landed Template #689 comparison went from zero to four paths with `--import-root backend`. All nine default reports match exactly. See [the real-PR casebook](benchmarks/PR_REVIEW.md#opt-in-import-root-check).
+
 ## Next steps
 
-1. Import roots: detect or accept a source root (for example `backend/`) so `app.*` imports match. The probe above shows this unlocks the submodule fix on real code.
+1. Public PR-link input with frozen snapshots and GitHub's merge-base semantics.
 2. Dotted module calls (`pkg.services.func()` after `import pkg.services`).
 3. Inherited `self.method()` lookups through base classes.
 4. Simple local instance types (`x = Cls(); x.method()`).

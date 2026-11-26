@@ -3,6 +3,8 @@
 The CLI's `--json` output and `POST /analyze` return the same analysis fields.
 The API and public-GitHub CLI analyses also include `repository_url`, the normalized
 HTTPS GitHub repository address. Local CLI analyses omit that optional address.
+CLI reports made with `--import-root` include that folder as an optional
+`import_root` string. File paths and symbol IDs remain relative to the repository.
 
 ## Existing fields
 

@@ -97,6 +97,29 @@ checks selected target edges have source evidence. It checks Python-only emptine
 for the docs/Compose cases. It does not automatically label every extra suggestion
 as correct or reject a future improvement that discovers a previously missed test.
 
+## Opt-in import root check
+
+On November 26, 2026, we compared the landed [Template #689 change](https://github.com/fastapi/full-stack-fastapi-template/commit/f67af697ebabc1d9186fa4197f9d428b758b6e05)
+with its parent. This is a separate example from the nine-case baseline.
+
+```powershell
+python cli.py https://github.com/fastapi/full-stack-fastapi-template 22a7d7a09b6bbc87b8c05e75470a68f91c49e6f8 f67af697ebabc1d9186fa4197f9d428b758b6e05 --import-root backend --json
+```
+
+The default report found zero paths. The opt-in report found four. One path
+goes from `crud.update_user` through `authentication_token_from_email` to the
+unchanged `normal_user_token_headers` pytest fixture. We checked the four call
+sites against the frozen source and verified that the public CLI report matched
+the local Git report apart from the repository URL. The resolved imports also
+let the analyzer recognize nested and settings-based router registration, for
+which it reports warnings and withholds full addresses. The default report had
+two route declarations and the opt-in report had none.
+
+Separately, on Template #1440's target snapshot, `backend/` callers went from
+zero resolved `crud.*` calls to 45. That is a snapshot call count, while #689
+demonstrates a difference in comparison results. All nine default comparison
+reports remained identical before and after the CLI option was added.
+
 ## Consequences for product work
 
 - Direct imported helpers can produce useful context outside edited files, as in
@@ -104,9 +127,9 @@ as correct or reject a future improvement that discovers a previously missed tes
 - HTTP tests, fixture injection, runtime instances, shared dependency aliases,
   nested routers, and settings-based registration limit coverage in real projects.
   A router declaration must not be presented as a verified deployed address.
-- The template's `app.*` imports live below `backend/`. The analyzer does not
-  configure that source root. Avoid guessing roots by stripping arbitrary path
-  prefixes; explicit project-root support needs its own design and cases.
+- The template's `app.*` imports live below `backend/`. The CLI can analyze that
+  layout with `--import-root backend`. The original nine reports use the default
+  import root. See the opt-in comparison below.
 - File rename identity works here, but a moved/import-only function can still add
   visual noise. Changed-function counts are not risk or semantic-change scores.
 - Keep current empty-result and incomplete-analysis explanations. Configuration,

@@ -2,6 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
+from analyzer import ImportRootError, normalize_import_root
 from git_analyzer import AnalysisGitError, AnalysisTimeoutError, analyze_change, analyze_working_tree
 from repository_loader import RepositoryLoadError, is_github_url, normalize_github_url, open_repository
 from request_budget import AnalysisLimitExceeded
@@ -57,8 +58,10 @@ def format_report(report, max_paths=20):
     lines = [
         "ImpactLens",
         f"Comparison: {report['base_commit']} -> {report['target_commit']}",
-        "",
     ]
+    if report.get("import_root"):
+        lines.append(f"Python import root: {report['import_root']}")
+    lines.append("")
 
     changed = report["changed_symbols"]
     target_changed_ids = {
@@ -160,6 +163,10 @@ def build_parser():
         help="Compare the current files against the base commit",
     )
     parser.add_argument(
+        "--import-root", metavar="FOLDER",
+        help="Repository-relative folder used as the Python import root, such as backend or src",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Print the report as JSON",
@@ -176,11 +183,13 @@ def main(arguments=None):
     parser = build_parser()
     args = parser.parse_args(arguments)
     try:
+        import_root = normalize_import_root(args.import_root)
+        options = {"import_root": import_root} if import_root else {}
         if args.working_tree:
             if args.target_commit is not None:
                 parser.error("target_commit cannot be used with --working-tree")
             with open_repository(args.repository) as repository:
-                report = analyze_working_tree(repository, args.base_commit)
+                report = analyze_working_tree(repository, args.base_commit, **options)
         else:
             if args.target_commit is None:
                 parser.error("target_commit is required unless --working-tree is used")
@@ -194,6 +203,7 @@ def main(arguments=None):
                         repository,
                         args.base_commit,
                         args.target_commit,
+                        **options,
                     )
             else:
                 with open_repository(args.repository) as repository:
@@ -201,8 +211,9 @@ def main(arguments=None):
                         repository,
                         args.base_commit,
                         args.target_commit,
+                        **options,
                     )
-    except (RepositoryLoadError, AnalysisTimeoutError, AnalysisGitError, AnalysisLimitExceeded) as error:
+    except (ImportRootError, RepositoryLoadError, AnalysisTimeoutError, AnalysisGitError, AnalysisLimitExceeded) as error:
         parser.error(str(error))
 
     if is_github_url(args.repository):

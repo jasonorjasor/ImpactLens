@@ -3,7 +3,7 @@
 import ast
 import io
 import tokenize
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from fastapi_analysis import apply_fastapi, declarations
 from request_budget import TraversalBudget, check_deadline
@@ -315,6 +315,46 @@ def module_name(relative_path):
     return name[:-9] if name.endswith(".__init__") else name
 
 
+class ImportRootError(ValueError):
+    pass
+
+
+def normalize_import_root(import_root):
+    if import_root is None:
+        return None
+    path = PurePosixPath(import_root.replace("\\", "/"))
+    if (not import_root.strip() or path.is_absolute() or ".." in path.parts
+            or ":" in import_root or not import_root.isprintable()):
+        raise ImportRootError("The import root must be a repository-relative folder such as backend or src.")
+    return path.as_posix() if path.parts else None
+
+
+def _module_names(source_by_path, import_root):
+    names = {}
+    if import_root is None:
+        return names
+
+    prefix = import_root + "/"
+    by_module = {}
+    by_package = {}
+    for path in source_by_path:
+        check_deadline()
+        inside_root = path.startswith(prefix)
+        name = module_name(path[len(prefix):] if inside_root else path)
+        names[path] = name
+        previous = by_module.get(name)
+        if name and previous is not None and (inside_root or previous.startswith(prefix)):
+            raise ImportRootError(f"Import root {import_root!r} makes {name!r} ambiguous: {previous} and {path}.")
+        by_module[name] = path
+
+        # Two roots cannot safely share a top-level package without modeling Python's search order.
+        package = name.partition(".")[0]
+        previous = by_package.setdefault(package, path)
+        if package and inside_root != previous.startswith(prefix):
+            raise ImportRootError(f"Import root {import_root!r} makes {package!r} ambiguous: {previous} and {path}.")
+    return names
+
+
 def resolve_import_module(imported_module, current_module, is_package=False):
     if not imported_module.startswith("."):
         return imported_module
@@ -443,13 +483,16 @@ def _resolve_files(files):
     return files
 
 
-def analyze_sources(source_by_path):
+def analyze_sources(source_by_path, *, import_root=None):
     files = []
     errors = []
     framework_facts = {}
+    module_names = _module_names(source_by_path, normalize_import_root(import_root))
 
     for relative_path in sorted(source_by_path):
         check_deadline()
+        module = module_names[relative_path] if module_names else module_name(relative_path)
+        is_package = relative_path == "__init__.py" or relative_path.endswith("/__init__.py")
         try:
             source = decode_python_source(source_by_path[relative_path])
             tree = ast.parse(source)
@@ -461,9 +504,7 @@ def analyze_sources(source_by_path):
             ]
             calls = extract_calls(tree)
             imports = extract_imports(tree)
-            framework_module = module_name(relative_path)
-            if relative_path.endswith("/__init__.py"):
-                framework_module += ".__init__"
+            framework_module = f"{module}.__init__" if is_package and module else module
             facts = declarations(tree, framework_module, relative_path)
             framework_facts[relative_path] = facts
             calls.extend(facts["dependencies"])
@@ -486,10 +527,9 @@ def analyze_sources(source_by_path):
                 if call["caller"] is not None
                 else None
             )
-        is_package = relative_path == "__init__.py" or relative_path.endswith("/__init__.py")
         for item in imports:
             item["resolved_module"] = resolve_import_module(
-                item["module"], module_name(relative_path), is_package
+                item["module"], module, is_package
             )
         for route in routes:
             route["id"] = f"{relative_path}::{route['qualname']}"
@@ -507,11 +547,9 @@ def analyze_sources(source_by_path):
         files.append(
             {
                 "path": relative_path,
-                "module": module_name(relative_path),
+                "module": module,
                 "is_package": is_package,
-                "module_bindings": module_level_bindings(
-                    tree, module_name(relative_path), is_package
-                ),
+                "module_bindings": module_level_bindings(tree, module, is_package),
                 "symbols": symbols,
                 "functions": functions,
                 "calls": calls,
@@ -526,7 +564,7 @@ def analyze_sources(source_by_path):
     return {"files": files, "errors": errors, "warnings": warnings}
 
 
-def analyze_repository(root):
+def analyze_repository(root, *, import_root=None):
     root = Path(root).resolve()
     if not root.is_dir():
         raise ValueError(f"Not a directory: {root}")
@@ -541,6 +579,6 @@ def analyze_repository(root):
         except (OSError, UnicodeDecodeError) as error:
             errors.append({"path": relative_path, "error": str(error)})
 
-    report = analyze_sources(sources)
+    report = analyze_sources(sources, import_root=import_root)
     report["errors"] = errors + report["errors"]
     return report

@@ -108,6 +108,7 @@ class CallSite(APIModel):
 
 class AnalyzeResponse(ImpactSummary):
     schema_version: Literal[3]
+    import_root: str | None = None
     resolved_commits: ResolvedCommits
     symbol_locations: list[SymbolLocation]
     call_sites: list[CallSite]
